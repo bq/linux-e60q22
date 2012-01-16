@@ -234,6 +234,7 @@ struct mmc_host {
 	unsigned int		caps2;		/* More host capabilities */
 
 #define MMC_CAP2_BOOTPART_NOACC	(1 << 0)	/* Boot partition no access */
+#define MMC_CAP2_BROKEN_VOLTAGE	(1 << 7)	/* Use the broken voltage */
 
 	mmc_pm_flag_t		pm_caps;	/* supported pm features */
 
