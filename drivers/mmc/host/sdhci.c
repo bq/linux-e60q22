@@ -2357,12 +2357,15 @@ out:
 
 #ifdef CONFIG_PM
 
+extern void eschc_cd_enable (struct sdhci_host *host, bool enable);
 int sdhci_suspend_host(struct sdhci_host *host, pm_message_t state)
 {
 	int ret;
 
 	sdhci_enable_clk(host);
 	sdhci_disable_card_detection(host);
+
+	eschc_cd_enable (host, 0);
 
 	/* Disable tuning since we are suspending */
 	if (host->version >= SDHCI_SPEC_300 && host->tuning_count &&
@@ -2422,6 +2425,7 @@ int sdhci_resume_host(struct sdhci_host *host)
 	sdhci_enable_clk(host);
 	sdhci_enable_card_detection(host);
 
+	eschc_cd_enable (host, 1);
 out:
 	/* sync worker */
 	if (!sdhci_is_sdio_attached(host))

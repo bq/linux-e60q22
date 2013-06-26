@@ -77,9 +77,14 @@ void pfuze_unlock(struct mc_pfuze *mc_pfuze)
 
 EXPORT_SYMBOL(pfuze_unlock);
 
+#define SW_SIMULATE_PFUZE	
+#ifdef SW_SIMULATE_PFUZE
+static unsigned char pfuze[256];
+#endif
 int pfuze_reg_read(struct mc_pfuze *mc_pfuze, unsigned int offset,
 		   unsigned char *val)
 {
+#ifndef SW_SIMULATE_PFUZE
 	unsigned char data;
 	int ret, i;
 	BUG_ON(!mutex_is_locked(&mc_pfuze->lock));
@@ -99,7 +104,10 @@ int pfuze_reg_read(struct mc_pfuze *mc_pfuze, unsigned int offset,
 			*val);
 		return -1;
 	}
-
+#else
+//	printk ("[%s=%d] offset %d\n",__func__,__LINE__,offset);
+	*val = pfuze[offset];
+#endif
 	return 0;
 }
 
@@ -108,6 +116,7 @@ EXPORT_SYMBOL(pfuze_reg_read);
 int pfuze_reg_write(struct mc_pfuze *mc_pfuze, unsigned int offset,
 		    unsigned char val)
 {
+#ifndef SW_SIMULATE_PFUZE
 	unsigned char buf[2];
 	int ret, i;
 
@@ -123,6 +132,10 @@ int pfuze_reg_write(struct mc_pfuze *mc_pfuze, unsigned int offset,
 		dev_err(&mc_pfuze->i2c_client->dev, "write failed!:%i\n", ret);
 		return ret;
 	}
+#else
+	pfuze[offset] = val;
+//	printk ("[%s=%d] offset %d value %X\n",__func__,__LINE__,offset,val);
+#endif
 	return 0;
 }
 

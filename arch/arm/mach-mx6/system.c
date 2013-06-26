@@ -34,6 +34,9 @@
 #include "crm_regs.h"
 #include "regs-anadig.h"
 
+#include "ntx_hwconfig.h"
+
+
 #define SCU_CTRL					0x00
 #define SCU_CONFIG					0x04
 #define SCU_CPU_STATUS				0x08
@@ -68,6 +71,8 @@ extern int low_bus_freq_mode;
 extern int audio_bus_freq_mode;
 extern bool mem_clk_on_in_wait;
 extern int chip_rev;
+
+extern volatile NTX_HWCONFIG *gptHWCFG;
 
 void gpc_set_wakeup(unsigned int irq[4])
 {
@@ -165,7 +170,9 @@ void mxc_cpu_lp_set(enum mxc_cpu_pwr_mode mode)
 		if (stop_mode >= 2) {
 			/* dormant mode, need to power off the arm core */
 			__raw_writel(0x1, gpc_base + GPC_PGC_CPU_PDN_OFFSET);
-			if (cpu_is_mx6q() || cpu_is_mx6dl()) {
+			if (cpu_is_mx6q() || cpu_is_mx6dl() && (4!=gptHWCFG->m_val.bRamType) ) 
+//			if (cpu_is_mx6q() || cpu_is_mx6dl() || cpu_is_mx6sl()  ) 
+			{
 				/* If stop_mode_config is clear, then 2P5 will be off,
 				need to enable weak 2P5, as DDR IO need 2P5 as
 				pre-driver */
@@ -200,9 +207,15 @@ void mxc_cpu_lp_set(enum mxc_cpu_pwr_mode mode)
 					/* Need to enable pull down if 2P5 is disabled */
 					anatop_val = __raw_readl(anatop_base +
 						HW_ANADIG_REG_2P5);
-					anatop_val |= BM_ANADIG_REG_2P5_ENABLE_PULLDOWN;
+					anatop_val |= (BM_ANADIG_REG_2P5_ENABLE_ILIMIT|
+						BM_ANADIG_REG_2P5_ENABLE_PULLDOWN);
 					__raw_writel(anatop_val, anatop_base +
 						HW_ANADIG_REG_2P5);
+					anatop_val = __raw_readl(anatop_base +
+						HW_ANADIG_REG_1P1);
+					anatop_val |= BM_ANADIG_REG_1P1_ENABLE_ILIMIT;
+					__raw_writel(anatop_val, anatop_base +
+                        HW_ANADIG_REG_1P1);
 				}
 			}
 			if (stop_mode != 3) {

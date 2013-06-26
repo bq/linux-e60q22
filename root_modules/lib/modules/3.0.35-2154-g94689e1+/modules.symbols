@@ -1,0 +1,5 @@
+# Aliases for symbols, used by symbol_request().
+alias symbol:crc_ccitt crc_ccitt
+alias symbol:crc_ccitt_table crc_ccitt
+alias symbol:bcmsdh_remove dhd
+alias symbol:bcmsdh_probe dhd

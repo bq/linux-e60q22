@@ -1458,6 +1458,11 @@ static int mxc_elcdif_fb_probe(struct platform_device *pdev)
 	 * access ELCDIF registers.
 	 */
 	clk_set_rate(g_elcdif_pix_clk, 25000000);
+	{
+			clk_enable(g_elcdif_pix_clk);
+			printk("skip elcdif ...\n");
+			goto err3;
+	}
 
 	fbi->var.activate |= FB_ACTIVATE_FORCE;
 	console_lock();

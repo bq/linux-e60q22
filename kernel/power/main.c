@@ -201,6 +201,35 @@ static ssize_t state_store(struct kobject *kobj, struct kobj_attribute *attr,
 
 power_attr(state);
 
+extern int gSleep_Mode_Suspend;
+static ssize_t state_extended_show(struct kobject *kobj, struct kobj_attribute *attr,
+			  char *buf)
+{
+	char *s = buf;
+	s += sprintf(s, "%d\n", gSleep_Mode_Suspend);
+	return (s - buf);
+}
+
+static ssize_t state_extended_store(struct kobject *kobj, struct kobj_attribute *attr,
+			   const char *buf, size_t n)
+{
+	if ('1' == *buf)
+		gSleep_Mode_Suspend = 1;
+	else 
+		gSleep_Mode_Suspend = 0;
+
+	return n;
+}
+
+static struct kobj_attribute state_extended_attr = {
+         .attr   = {
+                 .name = "state-extended",
+                 .mode = 0644,
+         },
+         .show   = state_extended_show,
+         .store  = state_extended_store,
+};
+ 
 #ifdef CONFIG_PM_SLEEP
 /*
  * The 'wakeup_count' attribute, along with the functions defined in
@@ -346,6 +375,7 @@ static struct attribute * g[] = {
 	&pm_test_attr.attr,
 #endif
 #endif
+	&state_extended_attr.attr,
 	NULL,
 };
 

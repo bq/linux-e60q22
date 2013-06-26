@@ -408,6 +408,29 @@ open_err:
 	return -EIO;
 }
 
+static struct input_dev *mxckbd_dev;
+
+void mxc_kpp_report_key(int isDown,__u16 wKeyCode)
+{
+	if (mxckbd_dev) {
+		input_event(mxckbd_dev, EV_KEY, wKeyCode, isDown);
+		input_sync(mxckbd_dev);
+	}
+	else {
+	}
+
+#if 0 // debug code .
+	printk("%s():mxckbd_dev@%p,Keycode=0x%x,%s\n",\
+			__FUNCTION__,mxckbd_dev,wKeyCode,isDown?"DOWN":"UP");
+#endif
+
+}
+
+void mxc_kpp_report_power(int isDown)
+{
+	mxc_kpp_report_key(isDown,KEY_POWER);
+}
+
 static int __devinit imx_keypad_probe(struct platform_device *pdev)
 {
 	const struct matrix_keymap_data *keymap_data = pdev->dev.platform_data;
@@ -445,6 +468,7 @@ static int __devinit imx_keypad_probe(struct platform_device *pdev)
 		error = -ENOMEM;
 		goto failed_rel_mem;
 	}
+	mxckbd_dev = input_dev;
 
 	keypad = kzalloc(sizeof(struct imx_keypad), GFP_KERNEL);
 	if (!keypad) {
@@ -567,10 +591,56 @@ static int __devexit imx_keypad_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+extern int gSleep_Mode_Suspend;
+
+static int imx_keypad_suspend(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct imx_keypad *keypad = platform_get_drvdata(pdev);
+
+	if (device_may_wakeup(&pdev->dev) && !gSleep_Mode_Suspend) {
+		enable_irq_wake(keypad->irq);
+	} else {
+		disable_irq(keypad->irq);
+//		key_pad_enabled = 0;
+//		clk_disable(kpp_clk);
+//		gpio_keypad_inactive();
+	}
+
+	return 0;
+}
+
+static int imx_keypad_resume(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct imx_keypad *keypad = platform_get_drvdata(pdev);
+
+	if (device_may_wakeup(&pdev->dev) && !gSleep_Mode_Suspend) {
+		disable_irq_wake(keypad->irq);
+	} else {
+//		gpio_keypad_active();
+//		clk_enable(kpp_clk);
+//		key_pad_enabled = 1;
+		enable_irq(keypad->irq);
+	}		
+
+	return 0;
+}
+
+static const struct dev_pm_ops imx_keypad_pm_ops = {
+	.suspend	= imx_keypad_suspend,
+	.resume		= imx_keypad_resume,
+};
+#endif
+
 static struct platform_driver imx_keypad_driver = {
 	.driver		= {
 		.name	= "imx-keypad",
 		.owner	= THIS_MODULE,
+#ifdef CONFIG_PM
+		.pm	= &imx_keypad_pm_ops,
+#endif
 	},
 	.probe		= imx_keypad_probe,
 	.remove		= __devexit_p(imx_keypad_remove),

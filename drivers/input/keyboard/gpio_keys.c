@@ -330,7 +330,9 @@ static void gpio_keys_report_event(struct gpio_button_data *bdata)
 	} else {
 		input_event(input, type, button->code, !!state);
 	}
+
 	input_sync(input);
+	
 }
 
 static void gpio_keys_work_func(struct work_struct *work)
@@ -455,6 +457,8 @@ static void gpio_keys_close(struct input_dev *input)
 		ddata->disable(input->dev.parent);
 }
 
+static struct input_dev *pindev=0;
+
 static int __devinit gpio_keys_probe(struct platform_device *pdev)
 {
 	struct gpio_keys_platform_data *pdata = pdev->dev.platform_data;
@@ -468,6 +472,8 @@ static int __devinit gpio_keys_probe(struct platform_device *pdev)
 			pdata->nbuttons * sizeof(struct gpio_button_data),
 			GFP_KERNEL);
 	input = input_allocate_device();
+	pindev = input ;
+
 	if (!ddata || !input) {
 		dev_err(dev, "failed to allocate state\n");
 		error = -ENOMEM;
@@ -515,6 +521,11 @@ static int __devinit gpio_keys_probe(struct platform_device *pdev)
 
 		input_set_capability(input, type, button->code);
 	}
+
+	// set capability for ntx gpiofn keys
+	input_set_capability(input, EV_KEY, KEY_POWER);
+	input_set_capability(input, EV_KEY, KEY_H);
+	input_set_capability(input, EV_KEY, KEY_F1);
 
 	error = sysfs_create_group(&pdev->dev.kobj, &gpio_keys_attr_group);
 	if (error) {
@@ -585,13 +596,14 @@ static int __devexit gpio_keys_remove(struct platform_device *pdev)
 
 
 #ifdef CONFIG_PM
+extern int gSleep_Mode_Suspend;
 static int gpio_keys_suspend(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	struct gpio_keys_platform_data *pdata = pdev->dev.platform_data;
 	int i;
 
-	if (device_may_wakeup(&pdev->dev)) {
+	if (device_may_wakeup(&pdev->dev) && !gSleep_Mode_Suspend) {
 		for (i = 0; i < pdata->nbuttons; i++) {
 			struct gpio_keys_button *button = &pdata->buttons[i];
 			if (button->wakeup) {
@@ -610,7 +622,9 @@ static int gpio_keys_resume(struct device *dev)
 	struct gpio_keys_drvdata *ddata = platform_get_drvdata(pdev);
 	struct gpio_keys_platform_data *pdata = pdev->dev.platform_data;
 	int i;
-
+	
+	if (gSleep_Mode_Suspend)
+		return 0;
 	for (i = 0; i < pdata->nbuttons; i++) {
 
 		struct gpio_keys_button *button = &pdata->buttons[i];
@@ -637,12 +651,27 @@ static struct platform_driver gpio_keys_device_driver = {
 	.remove		= __devexit_p(gpio_keys_remove),
 	.driver		= {
 		.name	= "gpio-keys",
+		//.name	= "mxckpd",
+		//.name	= "imx-keypad",
 		.owner	= THIS_MODULE,
 #ifdef CONFIG_PM
 		.pm	= &gpio_keys_pm_ops,
 #endif
 	}
 };
+
+void gpiokeys_report_key(int isDown,__u16 wKeyCode)
+{
+	if (pindev) {
+		input_event(pindev, EV_KEY, wKeyCode, isDown);
+	}
+}
+
+void gpiokeys_report_power(int isDown)
+{
+	gpiokeys_report_key(isDown,KEY_POWER);
+}
+
 
 static int __init gpio_keys_init(void)
 {

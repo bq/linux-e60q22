@@ -57,3 +57,6 @@ obj-$(CONFIG_KEYBOARD_MPR084)		+= mpr084.o
 obj-$(CONFIG_KEYBOARD_MXS)		+= mxs-kbd.o
 obj-$(CONFIG_KEYBOARD_MC9S08DZ60)	+= mc9s08dz60_keyb.o
 obj-$(CONFIG_KEYBOARD_MPR121)		+= mpr121.o
+obj-y += gpiofn.o 
+obj-y += tle4913_keypad.o
+

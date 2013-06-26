@@ -66,6 +66,7 @@
 #define LOCAL_TWD_COUNT_OFFSET		0x4
 #define LOCAL_TWD_CONTROL_OFFSET	0x8
 #define LOCAL_TWD_INT_OFFSET		0xc
+#define ANATOP_REG_1P1_OFFSET		0x110
 #define ANATOP_REG_2P5_OFFSET		0x130
 #define ANATOP_REG_CORE_OFFSET		0x140
 
@@ -106,7 +107,7 @@ static unsigned long iram_paddr, cpaddr;
 
 static u32 ccm_ccr, ccm_clpcr, scu_ctrl;
 static u32 gpc_imr[4], gpc_cpu_pup, gpc_cpu_pdn, gpc_cpu, gpc_ctr, gpc_disp;
-static u32 anatop[2], ccgr1, ccgr2, ccgr3, ccgr6;
+static u32 anatop[3], ccgr1, ccgr2, ccgr3, ccgr6;
 static u32 ccm_analog_pfd528;
 static u32 ccm_analog_pll3_480;
 static u32 ccm_anadig_ana_misc2;
@@ -247,6 +248,7 @@ static void mx6_suspend_store(void)
 		gpc_disp = __raw_readl(gpc_base + GPC_PGC_DISP_PGCR_OFFSET);
 	anatop[0] = __raw_readl(anatop_base + ANATOP_REG_2P5_OFFSET);
 	anatop[1] = __raw_readl(anatop_base + ANATOP_REG_CORE_OFFSET);
+	anatop[2] = __raw_readl(anatop_base + ANATOP_REG_1P1_OFFSET);
 }
 
 static void mx6_suspend_restore(void)
@@ -254,6 +256,7 @@ static void mx6_suspend_restore(void)
 	/* restore settings after suspend */
 	__raw_writel(anatop[0], anatop_base + ANATOP_REG_2P5_OFFSET);
 	__raw_writel(anatop[1], anatop_base + ANATOP_REG_CORE_OFFSET);
+	__raw_writel(anatop[2], anatop_base + ANATOP_REG_1P1_OFFSET);
 	/* Per spec, the count needs to be zeroed and reconfigured on exit from
 	 * low power mode
 	 */
@@ -319,6 +322,9 @@ static int mx6_suspend_enter(suspend_state_t state)
 		(mx6dl_revision() == IMX_CHIP_REVISION_1_0)) {
 		state = PM_SUSPEND_STANDBY;
 	}
+	
+//	if (cpu_is_mx6sl())
+//		state = PM_SUSPEND_STANDBY;
 
 	switch (state) {
 	case PM_SUSPEND_MEM:

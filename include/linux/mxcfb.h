@@ -23,6 +23,9 @@
 
 #include <linux/fb.h>
 
+
+#define MX50_IOCTL_IF	1
+
 #define FB_SYNC_OE_LOW_ACT	0x80000000
 #define FB_SYNC_CLK_LAT_FALL	0x40000000
 #define FB_SYNC_DATA_INVERT	0x20000000
@@ -98,6 +101,7 @@ struct mxcfb_rect {
 #define FB_POWERDOWN_DISABLE			-1
 
 struct mxcfb_alt_buffer_data {
+	void *virt_addr;
 	__u32 phys_addr;
 	__u32 width;	/* width of entire buffer */
 	__u32 height;	/* height of entire buffer */
@@ -130,6 +134,11 @@ struct mxcfb_waveform_modes {
 	int mode_gc8;
 	int mode_gc16;
 	int mode_gc32;
+
+	int mode_reagl;
+	int mode_reagld;
+	int mode_gl16;
+	int mode_a2;
 };
 
 #define MXCFB_WAIT_FOR_VSYNC	_IOW('F', 0x20, u_int32_t)
@@ -150,7 +159,12 @@ struct mxcfb_waveform_modes {
 #define MXCFB_SET_TEMPERATURE		_IOW('F', 0x2C, int32_t)
 #define MXCFB_SET_AUTO_UPDATE_MODE	_IOW('F', 0x2D, __u32)
 #define MXCFB_SEND_UPDATE		_IOW('F', 0x2E, struct mxcfb_update_data)
-#define MXCFB_WAIT_FOR_UPDATE_COMPLETE	_IOWR('F', 0x2F, struct mxcfb_update_marker_data)
+#ifdef MX50_IOCTL_IF//[
+#define MXCFB_WAIT_FOR_UPDATE_COMPLETE	_IOW('F', 0x2F, __u32)
+#define MXCFB_WAIT_FOR_UPDATE_COMPLETE2 _IOWR('F', 0x35, struct mxcfb_update_marker_data)
+#else //][!MX50_IOCTL_IF
+#define MXCFB_WAIT_FOR_UPDATE_COMPLETE _IOWR('F', 0x35, struct mxcfb_update_marker_data)
+#endif//] MX50_IOCTL_IF
 #define MXCFB_SET_PWRDOWN_DELAY		_IOW('F', 0x30, int32_t)
 #define MXCFB_GET_PWRDOWN_DELAY		_IOR('F', 0x31, int32_t)
 #define MXCFB_SET_UPDATE_SCHEME		_IOW('F', 0x32, __u32)

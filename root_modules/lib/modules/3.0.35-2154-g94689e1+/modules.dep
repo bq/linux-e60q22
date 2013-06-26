@@ -1,0 +1,13 @@
+kernel/crypto/authenc.ko:
+kernel/crypto/authencesn.ko:
+kernel/crypto/tcrypt.ko:
+kernel/drivers/misc/mxs-perfmon.ko:
+kernel/drivers/scsi/scsi_wait_scan.ko:
+kernel/drivers/net/wireless/bcmdhd/dhd.ko:
+kernel/drivers/usb/gadget/g_audio.ko:
+kernel/drivers/usb/gadget/g_ether.ko:
+kernel/drivers/usb/gadget/g_file_storage.ko:
+kernel/drivers/usb/gadget/g_serial.ko:
+kernel/drivers/mmc/card/sdio_wifi_pwr.ko:
+kernel/drivers/mxc/mlb/mxc_mlb150.ko:
+kernel/lib/crc-ccitt.ko:

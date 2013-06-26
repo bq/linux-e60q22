@@ -767,4 +767,14 @@ config TOUCHSCREEN_DA9052
         help
           Say y here to support the touchscreen found on
           Dialog Semiconductor DA9052 PMIC
+          
+config TOUCHSCREEN_ZFORCE
+       tristate "Neonode zForce IR touchscreen"
+       depends on I2C
+       help
+        Say Y here if you have a zForce touchscreen
+        controller
+
+        If unsure, say N.
+          
 endif

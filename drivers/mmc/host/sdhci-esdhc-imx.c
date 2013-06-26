@@ -789,6 +789,22 @@ static irqreturn_t cd_irq(int irq, void *data)
 	return IRQ_HANDLED;
 };
 
+extern int gSleep_Mode_Suspend;
+void eschc_cd_enable (struct sdhci_host *host, bool enable)
+{
+	struct esdhc_platform_data *boarddata = host->mmc->parent->platform_data;
+	if (gSleep_Mode_Suspend && boarddata->cd_gpio && (ESDHC_CD_GPIO == boarddata->cd_type)) {
+		if (enable) {
+			 request_irq(gpio_to_irq(boarddata->cd_gpio), cd_irq,
+				 IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,
+				 mmc_hostname(host->mmc), host);
+		}
+		else {
+			free_irq(gpio_to_irq(boarddata->cd_gpio), host);
+		}
+	}
+}
+
 static int esdhc_pltfm_init(struct sdhci_host *host, struct sdhci_pltfm_data *pdata)
 {
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
@@ -886,6 +902,12 @@ static int esdhc_pltfm_init(struct sdhci_host *host, struct sdhci_pltfm_data *pd
 			return 0;
 		}
 
+		if (ESDHC_CD_WIFI_PWR == boarddata->cd_type) {
+			extern void ntx_register_wifi_cd (irq_handler_t handler, void *data);
+			host->mmc->caps &= ~MMC_CAP_NONREMOVABLE;
+			ntx_register_wifi_cd (cd_irq, host);
+		}
+		else {
 		err = gpio_request_one(boarddata->wp_gpio, GPIOF_IN, "ESDHC_WP");
 		if (err) {
 			dev_warn(mmc_dev(host->mmc),
@@ -907,7 +929,7 @@ static int esdhc_pltfm_init(struct sdhci_host *host, struct sdhci_pltfm_data *pd
 			dev_warn(mmc_dev(host->mmc), "request irq error\n");
 			goto no_card_detect_irq;
 		}
-
+		}
 		imx_data->flags |= ESDHC_FLAG_GPIO_FOR_CD_WP;
 		/* Now we have a working card_detect again */
 		host->quirks &= ~SDHCI_QUIRK_BROKEN_CARD_DETECTION;
