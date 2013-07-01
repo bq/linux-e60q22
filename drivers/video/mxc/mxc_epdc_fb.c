@@ -3604,25 +3604,6 @@ int mxc_epdc_get_pwrdown_delay(struct fb_info *info)
 }
 EXPORT_SYMBOL(mxc_epdc_get_pwrdown_delay);
 
-/* compatibility structs for previous send_update ioctl */
-struct mxcfb_alt_buffer_data_compat {
-	void *virt_addr;
-	__u32 phys_addr;
-	__u32 width;
-	__u32 height;
-	struct mxcfb_rect alt_update_region;
-};
-
-struct mxcfb_update_data_compat {
-	struct mxcfb_rect update_region;
-	__u32 waveform_modes;
-	__u32 update_mode;
-	__u32 update_marker;
-	int temp;
-	uint flags;
-	struct mxcfb_alt_buffer_data_compat alt_buffer_data;
-};
-
 static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			     unsigned long arg)
 {
@@ -3689,53 +3670,6 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 				ret = -EFAULT;
 			}
 
-			break;
-		}
-	/* Freescale changed the size of the param structure, removing
-	 * the "void *virt_addr" in mxcfb_alt_buffer_data, which results
-	 * in a changed ioctl number, due to the size being 4 bits more.
-	 * More importantly due to the size change there are 4 bytes missing
-	 * from the param when it gets copied.
-	 * In the normal world breaking userspace is a big no-no and also blocks
-	 * using the same apps on different device incarnations.
-	 * Therefore introduce a workaround, that moves the read data to the
-	 * correct place.
-	 */
-	case 1078216238:
-		{
-			struct mxcfb_update_data_compat compat_data;
-			struct mxcfb_update_data upd_data;
-
-			if (copy_from_user(&compat_data, argp,
-				sizeof(compat_data)))
-				return -EFAULT;
-
-			/* copy the basic fields, that are unchanged */
-			memcpy(&upd_data, &compat_data, sizeof(upd_data) 
-				    - sizeof(struct mxcfb_alt_buffer_data));
-
-			/* the first void* from mxcfb_alt_buffer_data is gone,
-			 * so copy only the following memory
-			 */
-			memcpy(&upd_data.alt_buffer_data,
-				(&compat_data.alt_buffer_data) + sizeof(void*),
-				sizeof(struct mxcfb_alt_buffer_data));
-
-			ret = mxc_epdc_fb_send_update(&upd_data, info);
-			if (!ret)
-				return ret;
-			
-			/* copy the basic fields back, that are unchanged */
-			memcpy(&compat_data, &upd_data, sizeof(upd_data) 
-				    - sizeof(struct mxcfb_alt_buffer_data));
-
-			memcpy((&compat_data.alt_buffer_data) + sizeof(void*),
-				&upd_data.alt_buffer_data,
-				sizeof(struct mxcfb_alt_buffer_data));
-
-			if (ret == 0 && copy_to_user(argp, &upd_data,
-					sizeof(upd_data)))
-					ret = -EFAULT;
 			break;
 		}
 
