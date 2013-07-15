@@ -137,8 +137,11 @@ static void k_fake_s1d13522_progress_start(void)
 	//fake_s1d13522_progress_start(gptDC);
 }
 
-static int32_t k_fake_s1d13522_ioctl(unsigned int cmd,unsigned long arg)
+
+static int k_fake_s1d13522_wait_inited(void)
 {
+	int iRet=0;
+
 	if(0==giIsInited) {
 		if(in_interrupt()) {
 			printk("[%s]:skip before init (interrupt).",__FUNCTION__);
@@ -148,7 +151,12 @@ static int32_t k_fake_s1d13522_ioctl(unsigned int cmd,unsigned long arg)
 			wait_for_completion(&mxc_epdc_fake13522_inited);
 		}
 	}
-	
+	return iRet;
+}
+
+static int32_t k_fake_s1d13522_ioctl(unsigned int cmd,unsigned long arg)
+{
+	//k_fake_s1d13522_wait_inited();
 	return fake_s1d13522_ioctl(cmd,arg,gptDC);
 }
 
@@ -430,7 +438,7 @@ static int k_get_vcom(int *O_piVCOM_get_mV)
 static int k_fake_s1d13522_init(unsigned char *pbInitDCbuf)
 {
 	int iChk;
-	
+
 	gptDC = fake_s1d13522_initEx3(default_bpp,g_fb_data->info.screen_base,\
 			g_fb_data->info.var.xres,g_fb_data->info.var.yres, \
 				ALIGN(g_fb_data->info.var.xres,32),ALIGN(g_fb_data->info.var.yres,128));
@@ -521,8 +529,10 @@ static int k_fake_s1d13522_init(unsigned char *pbInitDCbuf)
 		}
 #endif //]LM75_ENABLED//
 
+		//printk("draw mode0\n");
 		epdc_powerup(g_fb_data);
 		draw_mode0(g_fb_data);
+		//printk("draw mode0 end\n");
 
 		g_fb_data->powering_down = true;
 		schedule_delayed_work(&g_fb_data->epdc_done_work,
@@ -574,8 +584,14 @@ static int k_fake_s1d13522_init(unsigned char *pbInitDCbuf)
 			}
 			
 			if( gdwLOGO_size>=((ilogo_width*ilogo_height)>>1) ) {
+				u32 old_upd_scheme=g_fb_data->upd_scheme;
+
+				DBG_MSG("drawing logo begin ...\n");
+				mxc_epdc_fb_set_upd_scheme(UPDATE_SCHEME_SNAPSHOT,&g_fb_data->info);
 				fake_s1d13522_display_img(0,0,ilogo_width,ilogo_height,
 					pbInitDCbuf,gptDC,4,0);
+				mxc_epdc_fb_set_upd_scheme(old_upd_scheme,&g_fb_data->info);
+				DBG_MSG("drawing logo end ...\n");
 			}
 			else {
 				printk("logo skip : logosize %u < %u !! \n ",(unsigned int)gdwLOGO_size,

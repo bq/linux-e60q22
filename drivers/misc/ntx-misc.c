@@ -227,7 +227,7 @@ extern int gIsCustomerUi;
 static void ac_in_int_function(int irq)
 {
 	//del_timer_sync(&acin_pg_timer);
-	cancel_delayed_work(&work_acin_pg);
+	//cancel_delayed_work(&work_acin_pg);
 
 	if (gpio_get_value (MX6SL_NTX_ACIN_PG)) {
 		irq_set_irq_type(irq, IRQF_TRIGGER_FALLING);
@@ -239,7 +239,7 @@ static void ac_in_int_function(int irq)
 	g_acin_pg_debounce = 0;
 	if(time_after(jiffies,gdwTheTickToChkACINPlug)) {
 		//mod_timer(&acin_pg_timer, jiffies + 1);
-		schedule_delayed_work(&work_acin_pg,1);
+		schedule_delayed_work(&work_acin_pg,10);
 	}
 	else {
 		//mod_timer(&acin_pg_timer, gdwTheTickToChkACINPlug);
@@ -258,7 +258,9 @@ static void acin_pg_chk(void)
 
 	if (!gpio_get_value (MX6SL_NTX_ACIN_PG)) {
 		++g_acin_pg_debounce;
-		if (10 == g_acin_pg_debounce) {
+		//if (10 == g_acin_pg_debounce) 
+		if (1 == g_acin_pg_debounce) 
+		{
 			if (gIsCustomerUi) {
 				if(mxc_misc_report_usb) {
 					mxc_misc_report_usb(1);
@@ -270,7 +272,7 @@ static void acin_pg_chk(void)
 			}
 		}
 		//mod_timer(&acin_pg_timer, jiffies + 1);
-		schedule_delayed_work(&work_acin_pg,1);
+		schedule_delayed_work(&work_acin_pg,10);
 	}
 	else {
 		//if (gLastBatValue)
@@ -503,6 +505,8 @@ static int pmic_battery_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, di);
 
+	INIT_DELAYED_WORK(&di->work, pmic_battery_work);
+
 	di->charger.name = "mc13892_charger";	// "ntx_up_charger"
 	di->charger.type = POWER_SUPPLY_TYPE_MAINS;
 	di->charger.properties = ntx_up_charger_props;
@@ -551,7 +555,6 @@ static int pmic_battery_probe(struct platform_device *pdev)
 	enable_irq_wake(irq);
 
 
-	INIT_DELAYED_WORK(&di->work, pmic_battery_work);
 	schedule_delayed_work(&di->work, 5*HZ);
 
 	goto success;
