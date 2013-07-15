@@ -1,1 +1,1 @@
-link ../../../arch/arm/mach-mx6/ntx_hwconfig.h
+../../../arch/arm/mach-mx6/ntx_hwconfig.h
