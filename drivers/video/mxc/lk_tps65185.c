@@ -78,10 +78,12 @@
 
 		//  GPIO input
 	#define GPIO_TPS65185_PWRGOOD							IMX_GPIO_NR(2,13) // EPDC_PWRSTAT
-	#define GPIO_TPS65185_PWRGOOD_PADCFG			MX6SL_PAD_EPDC_PWRSTAT__GPIO_2_13_PUINT
+	#define GPIO_TPS65185_PWRGOOD_INT_PADCFG			MX6SL_PAD_EPDC_PWRSTAT__GPIO_2_13_PUINT
+	#define GPIO_TPS65185_PWRGOOD_GPIO_PADCFG			MX6SL_PAD_EPDC_PWRSTAT__GPIO_2_13
 
 	#define GPIO_TPS65185_INT						IMX_GPIO_NR(2,9) // EPDC_PWRCTRL2
 	#define GPIO_TPS65185_INT_PADCFG		 MX6SL_PAD_EPDC_PWRCTRL2__GPIO_2_9_PUINT
+	#define GPIO_TPS65185_INT_GPIO_PADCFG		 MX6SL_PAD_EPDC_PWRCTRL2__GPIO_2_9
 
 	//#define GPIO_TPS65185_SDA	
 	//#define GPIO_TPS65185_SDL	
@@ -106,10 +108,12 @@
 
 	//  GPIO input
 	#define GPIO_TPS65185_PWRGOOD	(2*32 + 28)	/* GPIO_3_28 */
-	#define GPIO_TPS65185_PWRGOOD_PADCFG			MX50_PAD_EPDC_PWRSTAT__GPIO_3_28_INT
+	#define GPIO_TPS65185_PWRGOOD_INT_PADCFG			MX50_PAD_EPDC_PWRSTAT__GPIO_3_28_INT
+	#define GPIO_TPS65185_PWRGOOD_GPIO_PADCFG			MX50_PAD_EPDC_PWRSTAT__GPIO_3_28
 
 	#define GPIO_TPS65185_INT		(3*32 + 15)	/* GPIO_4_15 */
 	#define GPIO_TPS65185_INT_PADCFG		 MX50_PAD_ECSPI1_SS0__GPIO_4_15_PUINT
+	#define GPIO_TPS65185_INT_GPIO_PADCFG		 MX50_PAD_ECSPI1_SS0__GPIO_4_15
 
 	//#define GPIO_TPS65185_SDA	(5*32+21) /* GPIO_6_21 */
 	//#define GPIO_TPS65185_SDL	(5*32+20) /* GPIO_6_20 */
@@ -158,12 +162,19 @@ typedef struct tagTPS65185_PWRDWN_WORK_PARAM {
 	sema_init(&gtTPS65185_DataA[_iChipIdx].chmod_lock,1);\
 }
 
+// externals ...
+extern volatile NTX_HWCONFIG *gptHWCFG;
+extern volatile int gSleep_Mode_Suspend;
+
+
+// 
 static TPS65185_PWRDWN_WORK_PARAM gtPwrdwn_work_param;
 
 static struct i2c_adapter *gpI2C_adapter = 0;
 static struct i2c_client *gpI2C_clientA[TOTAL_CHIPS] = {0,};
 volatile static int giIsTPS65185_inited=0;
 volatile static int giIsTPS65185_gpio_inited=0;
+volatile static int giIsTPS65185_turnoff_EP3V3=0;
 
 static struct i2c_board_info gtTPS65185_BIA[TOTAL_CHIPS] = {
 	{
@@ -632,10 +643,10 @@ static void _tps65185_pwrdwn(void)
 	if( TPS65185_MODE_ACTIVE==dwCurrentMode && iIsWaitPwrOff ) {
 		tps65185_wait_panel_poweroff();
 
-		#ifdef TPS65185_EP3V3_PWROFF//[
-
-		udelay(100);TPS65185_REG_SET(ENABLE,V3P3_EN,0);
-		#endif //]TPS65185_EP3V3_PWROFF
+		if(giIsTPS65185_turnoff_EP3V3) {
+			// Turn off EV_3V3 ...
+			udelay(100);TPS65185_REG_SET(ENABLE,V3P3_EN,0);
+		}
 		
 	}
 
@@ -670,7 +681,7 @@ static int tps65185_gpio_init(void)
 	}
 
 	// inputs
-	mxc_iomux_v3_setup_pad(GPIO_TPS65185_PWRGOOD_PADCFG);
+	mxc_iomux_v3_setup_pad(GPIO_TPS65185_PWRGOOD_INT_PADCFG);
 	gpio_request(GPIO_TPS65185_PWRGOOD, "tps65185_PWRGOOD");
 	gpio_direction_input(GPIO_TPS65185_PWRGOOD);
 	//giIsTPS65185_PwrOn=gpio_get_value(GPIO_TPS65185_PWRGOOD);
@@ -940,6 +951,11 @@ int tps65185_init(int iPort,int iEPDTimingType)
 
 	INIT_DELAYED_WORK(&gtPwrdwn_work_param.pwrdwn_work,tps65185_pwrdwn_work_func);
 
+	if(34==gptHWCFG->m_val.bPCB||35==gptHWCFG->m_val.bPCB||33==gptHWCFG->m_val.bPCB) {
+		// E606FXA/E606FXB/E60Q2X ...
+		giIsTPS65185_turnoff_EP3V3=1;
+		printk("%s(%d): EP_3V3 ON/OFF control enabled !\n",__FILE__,__LINE__);
+	}
 	giIsTPS65185_inited=1;
 
 	// change TPS65185 to standby mode .
@@ -1362,18 +1378,18 @@ int tps65185_chg_mode(unsigned long *IO_pdwMode,int iIsWaitPwrOff)
 
 	//disable_irq(irq_INT);
 	//disable_irq(irq_PG);
-	if(0==giIsTPS65185_inited) {
-		ERR_MSG("[Error] %s : tps65185 must be initialized first !\n",__FUNCTION__);
-		GALLEN_DBGLOCAL_ESC();
-		iRet = TPS65185_RET_INITNOTYET;
-		goto exit;
-	}
 
 	down(&gtTPS65185_DataA[0].chmod_lock);
 
 	dwCurrent_mode = gtTPS65185_DataA[0].dwCurrent_mode;
 	dwNewMode = *IO_pdwMode;
 
+	if(0==giIsTPS65185_inited) {
+		ERR_MSG("[Error] %s : tps65185 must be initialized first !\n",__FUNCTION__);
+		GALLEN_DBGLOCAL_ESC();
+		iRet = TPS65185_RET_INITNOTYET;
+		goto exit;
+	}
 
 	if(!IO_pdwMode) {
 		ERR_MSG("[Warning] %s : parameter error !\n",__FUNCTION__);
@@ -1425,8 +1441,14 @@ int tps65185_chg_mode(unsigned long *IO_pdwMode,int iIsWaitPwrOff)
 			iRetryCnt = 0;
 			do {
 				mdelay(2);
-				iRet = tps65185_reg_init(1);
+				if(giIsTPS65185_turnoff_EP3V3) {
+					iRet = tps65185_reg_init(0);
+				}
+				else {
+					iRet = tps65185_reg_init(1);
+				}
 				if(iRet>=0) {
+					TPS65185_REG_SET(ENABLE,V3P3_EN,1);
 					udelay(100);
 					gpio_direction_output(GPIO_TPS65185_PWRUP, 1);
 					break;
@@ -1441,10 +1463,9 @@ int tps65185_chg_mode(unsigned long *IO_pdwMode,int iIsWaitPwrOff)
 			//gpio_direction_output(GPIO_TPS65185_PWRUP, 0);
 			//ERR_MSG(".");
 			//udelay(1900);
-			#ifdef TPS65185_EP3V3_PWROFF//[
-
-			TPS65185_REG_SET(ENABLE,V3P3_EN,1);udelay(100);
-			#endif //]TPS65185_EP3V3_PWROFF
+			if(giIsTPS65185_turnoff_EP3V3) {
+				TPS65185_REG_SET(ENABLE,V3P3_EN,1);udelay(100);
+			}
 
 			gpio_direction_output(GPIO_TPS65185_PWRUP, 1);
 			//ERR_MSG(".");
@@ -1522,14 +1543,15 @@ int tps65185_chg_mode(unsigned long *IO_pdwMode,int iIsWaitPwrOff)
 			iRetryCnt = 0;
 			do {
 				mdelay(2);
-				#ifdef TPS65185_EP3V3_PWROFF//[
-				
-				iRet = tps65185_reg_init(0);
-				#else //][! TPS65185_EP3V3_PWROFF
-				iRet = tps65185_reg_init(1);
-				#endif //]  TPS65185_EP3V3_PWROFF
+				if(giIsTPS65185_turnoff_EP3V3) {
+					iRet = tps65185_reg_init(0);
+				}
+				else {
+					iRet = tps65185_reg_init(1);
+				}
 				if(iRet>=0) {
 					gtTPS65185_DataA[0].dwCurrent_mode = dwNewMode;
+					//TPS65185_REG_SET(ENABLE,V3P3_EN,1);
 					udelay(100);
 					break;
 				}
@@ -1781,6 +1803,70 @@ int tps65185_vcom_kickback_measurement(int *O_piVCOM_mv)
 }
 
 
+int tps65185_ONOFF(int iIsON)
+{
+	int iRet=0;
+
+	if(!giIsTPS65185_turnoff_EP3V3) {
+		return 1;
+	}
+
+	if(iIsON) {
+		// Turn on the TPS65185 power .
+		 
+		//gpio_free(GPIO_TPS65185_SDL);
+		//gpio_free(GPIO_TPS65185_SDA);
+
+		//mxc_iomux_v3_setup_pad(MX50_PAD_I2C2_SCL__I2C2_SCL);
+		//mxc_iomux_v3_setup_pad(MX50_PAD_I2C2_SDA__I2C2_SDA);
+
+		//gpio_direction_output(GPIO_TPS65185_VCOMCTRL, 1);
+
+		gpio_direction_output(GPIO_TPS65185_VIN, 1);
+
+		mxc_iomux_v3_setup_pad(GPIO_TPS65185_PWRGOOD_INT_PADCFG); // POWERGOOD .
+		mxc_iomux_v3_setup_pad(GPIO_TPS65185_INT_PADCFG); // EP_INT
+		gpio_direction_input(GPIO_TPS65185_PWRGOOD);
+		gpio_direction_input(GPIO_TPS65185_INT);
+
+		mdelay(5);
+	}
+	else {
+		// Cut off the TPS65185 power .
+		//
+		mxc_iomux_v3_setup_pad(GPIO_TPS65185_PWRGOOD_GPIO_PADCFG); // POWERGOOD
+		mxc_iomux_v3_setup_pad(GPIO_TPS65185_INT_GPIO_PADCFG); // EP_INT
+		//udelay(50);
+		//mxc_iomux_v3_setup_pad(MX50_PAD_I2C2_SCL__GPIO_6_20);
+		//gpio_request(GPIO_TPS65185_SDL, "tps65185_i2c_sdl");
+		//gpio_direction_input (GPIO_TPS65185_SDL);
+		//gpio_direction_output(GPIO_TPS65185_SDL, 1);
+
+		//mxc_iomux_v3_setup_pad(MX50_PAD_I2C2_SDA__GPIO_6_21);
+		//gpio_request(GPIO_TPS65185_SDA, "tps65185_i2c_sda");
+		//gpio_direction_input (GPIO_TPS65185_SDL);
+		//gpio_direction_output(GPIO_TPS65185_SDA, 1);
+
+
+		gpio_direction_output(GPIO_TPS65185_PWRUP, 0);
+		gpio_direction_output(GPIO_TPS65185_WAKEUP, 0);
+
+		gpio_direction_output(GPIO_TPS65185_PWRGOOD, 0);
+		gpio_direction_output(GPIO_TPS65185_INT, 0);
+
+		//gpio_direction_output(GPIO_TPS65185_VCOMCTRL, 0);
+
+		gpio_direction_output(GPIO_TPS65185_VIN, 0);
+
+		down(&gtTPS65185_DataA[0].chmod_lock);
+		gtTPS65185_DataA[0].dwCurrent_mode=TPS65185_MODE_SLEEP;
+		up(&gtTPS65185_DataA[0].chmod_lock);
+	}
+
+	return iRet;
+}
+
+
 #define TPS65185_SUSPEND		1	
 
 int tps65185_suspend(void)
@@ -1810,9 +1896,11 @@ int tps65185_suspend(void)
 #ifdef TPS65185_PWR_ONOFF_INT//[
 
 	irq = gpio_to_irq(GPIO_TPS65185_INT);
-	disable_irq(irq);
+	free_irq(irq,0);
+	//disable_irq(irq);
 	irq = gpio_to_irq(GPIO_TPS65185_PWRGOOD);
-	disable_irq(irq);
+	free_irq(irq,0);
+	//disable_irq(irq);
 
 #endif //] TPS65185_PWR_ONOFF_INT
 
@@ -1822,11 +1910,17 @@ int tps65185_suspend(void)
 	if(delayed_work_pending(&gtPwrdwn_work_param.pwrdwn_work)) {
 		DBG_MSG("pmic pwrdwn delay work pending !!\n");
 		//flush_delayed_work(&gtPwrdwn_work_param.pwrdwn_work);
-		iRet = -1;
+		return -1;
 		//tps65185_resume();
 	}
-	
 
+
+#if 0
+	if(gSleep_Mode_Suspend) {
+		DBG_MSG("%s() : sleep mode to trun off PMIC .\n",__FUNCTION__);
+		//tps65185_ONOFF(0);
+	}
+#endif
 
 	dbgLEAVE();
 #endif //]TPS65185_SUSPEND
@@ -1837,21 +1931,37 @@ void tps65185_resume(void)
 {
 #ifdef TPS65185_SUSPEND //[
 	unsigned long dwTPS65185_mode;
-	int irq;
 
 	dbgENTER();
 	
 
+#if 0	
+	if(gSleep_Mode_Suspend) {
+		DBG_MSG("%s() : resume from sleep mode to trun on PMIC .\n",__FUNCTION__);
+		//tps65185_ONOFF(1);
+	}	
+#endif
 
 	dwTPS65185_mode = TPS65185_MODE_STANDBY;
 	tps65185_chg_mode(&dwTPS65185_mode,1);
 
 #ifdef TPS65185_PWR_ONOFF_INT//[
+	{
+		int irq,iChk;
+		irq = gpio_to_irq(GPIO_TPS65185_INT);
+		//enable_irq(irq);
+		iChk = request_irq(irq, tps65185_int, 0, "tps65185_INT", 0);
+		if (iChk) {
+			pr_info("register TPS65185 interrupt failed\n");
+		}
 
-	irq = gpio_to_irq(GPIO_TPS65185_INT);
-	enable_irq(irq);
-	irq = gpio_to_irq(GPIO_TPS65185_PWRGOOD);
-	enable_irq(irq);
+		irq = gpio_to_irq(GPIO_TPS65185_PWRGOOD);
+		//enable_irq(irq);
+		iChk = request_irq(irq, tps65185_pwrgood_inthandler, 0, "tps65185_PWRGOOD", 0);
+		if (iChk) {
+			pr_info("register TPS65185 pwrgood interrupt failed\n");
+		}
+	}
 #endif //]TPS65185_PWR_ONOFF_INT
 
 

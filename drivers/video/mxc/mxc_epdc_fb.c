@@ -62,7 +62,7 @@
 #define GDEBUG 0
 #include <linux/gallen_dbg.h>
 
-
+//#define DO_NOT_POWEROFF				1
 #define NTX_WFM_MODE_OPTIMIZED 1
 
 
@@ -70,7 +70,7 @@
  * Enable this define to have a default panel
  * loaded during driver initialization
  */
-/*#define DEFAULT_PANEL_HW_INIT*/
+//#define DEFAULT_PANEL_HW_INIT
 
 #define NUM_SCREENS_MIN	2
 
@@ -287,7 +287,7 @@ struct mxcfb_waveform_data_file {
 
 void __iomem *epdc_base;
 
-struct mxc_epdc_fb_data *g_fb_data;
+volatile struct mxc_epdc_fb_data *g_fb_data;
 
 /* forward declaration */
 static int mxc_epdc_fb_get_temp_index(struct mxc_epdc_fb_data *fb_data,
@@ -622,12 +622,14 @@ static inline void epdc_set_update_addr(u32 addr)
 
 static inline void epdc_set_update_coord(u32 x, u32 y)
 {
+	DBG_MSG("%s(),x=%hd,y=%hd\n",__FUNCTION__,x,y);
 	u32 val = (y << EPDC_UPD_CORD_YCORD_OFFSET) | x;
 	__raw_writel(val, EPDC_UPD_CORD);
 }
 
 static inline void epdc_set_update_dimensions(u32 width, u32 height)
 {
+	DBG_MSG("%s(),w=%hd,h=%hd\n",__FUNCTION__,width,height);
 	u32 val = (height << EPDC_UPD_SIZE_HEIGHT_OFFSET) | width;
 	__raw_writel(val, EPDC_UPD_SIZE);
 }
@@ -695,12 +697,14 @@ static void epdc_submit_update(u32 lut_num, u32 waveform_mode, u32 update_mode,
 		__raw_writel(reg_val, EPDC_UPD_FIXED);
 	}
 
-	if (waveform_mode == WAVEFORM_MODE_AUTO)
+	if (waveform_mode == WAVEFORM_MODE_AUTO) {
 		reg_val |= EPDC_UPD_CTRL_AUTOWV;
-	else
+	}
+	else {
 		reg_val |= ((waveform_mode <<
 				EPDC_UPD_CTRL_WAVEFORM_MODE_OFFSET) &
 				EPDC_UPD_CTRL_WAVEFORM_MODE_MASK);
+	}
 
 	reg_val |= (use_dry_run ? EPDC_UPD_CTRL_DRY_RUN : 0) |
 	    ((lut_num << EPDC_UPD_CTRL_LUT_SEL_OFFSET) &
@@ -788,11 +792,11 @@ static inline int epdc_get_next_lut(void)
 
 static int epdc_choose_next_lut(int rev, int *next_lut)
 {
-	u64 luts_status, unprocessed_luts;
-	bool next_lut_found = false;
+	u64 luts_status, unprocessed_luts, used_luts;
 	/* Available LUTs are reduced to 16 in 5-bit waveform mode */
-	u32 format_p5n = __raw_readl(EPDC_FORMAT) &
-		EPDC_FORMAT_BUF_PIXEL_FORMAT_P5N;
+	bool format_p5n = ((__raw_readl(EPDC_FORMAT) &
+	EPDC_FORMAT_BUF_PIXEL_FORMAT_MASK) ==
+	EPDC_FORMAT_BUF_PIXEL_FORMAT_P5N);
 
 	luts_status = __raw_readl(EPDC_STATUS_LUTS);
 	if ((rev < 20) || format_p5n)
@@ -809,48 +813,43 @@ static int epdc_choose_next_lut(int rev, int *next_lut)
 			unprocessed_luts &= 0xFFFF;
 	}
 
-	while (!next_lut_found) {
-		/*
-		 * Selecting a LUT to minimize incidence of TCE Underrun Error
-		 * --------------------------------------------------------
-		 * We want to find the lowest order LUT that is of greater
-		 * order than all other active LUTs.  If highest order LUT
-		 * is active, then we want to choose the lowest order
-		 * available LUT.
-		 *
-		 * NOTE: For EPDC version 2.0 and later, TCE Underrun error
-		 *       bug is fixed, so it doesn't matter which LUT is used.
-		 */
-		*next_lut = fls64(luts_status);
+	/*
+	 * Note on unprocessed_luts: There is a race condition
+	 * where a LUT completes, but has not been processed by
+	 * IRQ handler workqueue, and then a new update request
+	 * attempts to use that LUT.  We prevent that here by
+	 * ensuring that the LUT we choose doesn't have its IRQ
+	 * bit set (indicating it has completed but not yet been
+	 * processed).
+	 */
+	used_luts = luts_status | unprocessed_luts;
 
-		if ((rev < 20) || format_p5n) {
-			if (*next_lut > 15)
-				*next_lut = ffz(luts_status);
-		} else {
-			if (*next_lut > 63) {
-				*next_lut = ffz((u32)luts_status);
-				if (*next_lut == -1)
-					*next_lut =
-						ffz((u32)(luts_status >> 32)) + 32;
-			}
-		}
+	/*
+	 * Selecting a LUT to minimize incidence of TCE Underrun Error
+	 * --------------------------------------------------------
+	 * We want to find the lowest order LUT that is of greater
+	 * order than all other active LUTs.  If highest order LUT
+	 * is active, then we want to choose the lowest order
+	 * available LUT.
+	 *
+	 * NOTE: For EPDC version 2.0 and later, TCE Underrun error
+	 *       bug is fixed, so it doesn't matter which LUT is used.
+	 */
 
-		/*
-		 * Note on unprocessed_luts: There is a race condition
-		 * where a LUT completes, but has not been processed by
-		 * IRQ handler workqueue, and then a new update request
-		 * attempts to use that LUT.  We prevent that here by
-		 * ensuring that the LUT we choose doesn't have its IRQ
-		 * bit set (indicating it has completed but not yet been
-		 * processed).
-		 */
-		if ((1 << *next_lut) & unprocessed_luts)
-			luts_status |= (1 << *next_lut);
+	if ((rev < 20) || format_p5n) {
+		*next_lut = fls64(used_luts);
+		if (*next_lut > 15)
+			*next_lut = ffz(used_luts);
+	} else {
+		if ((u32)used_luts != ~0UL)
+			*next_lut = ffz((u32)used_luts);
+		else if ((u32)(used_luts >> 32) != ~0UL)
+			*next_lut = ffz((u32)(used_luts >> 32)) + 32;
 		else
-			next_lut_found = true;
+			*next_lut = INVALID_LUT;
 	}
 
-	if (luts_status & 0x8000)
+	if (used_luts & 0x8000)
 		return 1;
 	else
 		return 0;
@@ -1310,6 +1309,8 @@ static void epdc_powerdown(struct mxc_epdc_fb_data *fb_data)
 		fb_data->pdata->disable_pins();
 	}
 
+#ifdef DO_NOT_POWEROFF
+#else//][!DO_NOT_POWEROFF
 #ifdef USE_BSP_PMIC //[
 	/* turn off the V3p3 */
 	regulator_disable(fb_data->v3p3_regulator);
@@ -1327,6 +1328,7 @@ static void epdc_powerdown(struct mxc_epdc_fb_data *fb_data)
 		
 	}
 #endif //] USE_BSP_PMIC
+#endif //] DO_NOT_POWEROFF
 
 	fb_data->power_state = POWER_STATE_OFF;
 	fb_data->powering_down = false;
@@ -1370,6 +1372,7 @@ static int mxc_epdc_fb_mmap(struct fb_info *info, struct vm_area_struct *vma)
 	GALLEN_DBGLOCAL_BEGIN();
 
 	fake_s1d13522_progress_stop();
+	k_fake_s1d13522_wait_inited();
 
 	if(0==gptHWCFG->m_val.bUIStyle) {
 		GALLEN_DBGLOCAL_RUNLOG(0);
@@ -2027,16 +2030,21 @@ int mxc_epdc_fb_set_auto_update(u32 auto_mode, struct fb_info *info)
 	struct mxc_epdc_fb_data *fb_data = info ?
 		(struct mxc_epdc_fb_data *)info:g_fb_data;
 
+	GALLEN_DBGLOCAL_BEGIN();
 	dev_dbg(fb_data->dev, "Setting auto update mode to %d\n", auto_mode);
 
 	if ((auto_mode == AUTO_UPDATE_MODE_AUTOMATIC_MODE)
-		|| (auto_mode == AUTO_UPDATE_MODE_REGION_MODE))
+		|| (auto_mode == AUTO_UPDATE_MODE_REGION_MODE)) {
+		GALLEN_DBGLOCAL_PRINTMSG("%s,auto_mode=%hd\n",__FUNCTION__,auto_mode);
 		fb_data->auto_mode = auto_mode;
+	}
 	else {
 		dev_err(fb_data->dev, "Invalid auto update mode parameter.\n");
+		GALLEN_DBGLOCAL_ESC();
 		return -EINVAL;
 	}
 
+	GALLEN_DBGLOCAL_END();
 	return 0;
 }
 EXPORT_SYMBOL(mxc_epdc_fb_set_auto_update);
@@ -2560,7 +2568,7 @@ static int epdc_submit_merge(struct update_desc_list *upd_desc_list,
 	/* Merged update should take on the earliest order */
 	upd_desc_list->update_order =
 		(upd_desc_list->update_order > update_to_merge->update_order) ?
-		update_to_merge->update_order : upd_desc_list->update_order;
+		upd_desc_list->update_order : update_to_merge->update_order;
 
 	return MERGE_OK;
 }
@@ -2577,8 +2585,8 @@ static void epdc_firmware_work_func(struct work_struct *work)
 	fw.size = gdwWF_size;
 	fw.data = (u8*)gpbWF_vaddr;
 
-	printk("[%s]:fw p=%p,size=%u,fb_data@%p\n",__FUNCTION__,
-			fw.data,fw.size,fb_data);
+	printk("[%s]:fw p=%p,size=%u,fb_data@%p,pdata=%p\n",__FUNCTION__,
+			fw.data,fw.size,fb_data,fb_data->pdata);
 	mxc_epdc_fb_fw_handler(&fw,fb_data);
 }
 
@@ -3233,17 +3241,16 @@ static int mxc_epdc_fb_send_single_update(struct mxcfb_update_data *upd_data,
 					if(NTX_WFM_MODE_GC16==upd_desc->upd_data.waveform_mode && 
 						upd_desc->upd_data.update_mode == UPDATE_MODE_PARTIAL) 
 					{
-						DBG_MSG("WF Mode version=0x%02x,chg W.F Mode GC16(%d)->GL16(%d) @ partial\n",
-								bModeVersion,NTX_WFM_MODE_GC16,NTX_WFM_MODE_GL16);
+						DBG_MSG("chg W.F Mode GC16(%d)->GL16(%d) @ partial\n",
+								NTX_WFM_MODE_GC16,NTX_WFM_MODE_GL16);
 						upd_desc->upd_data.waveform_mode = NTX_WFM_MODE_GL16;
 					}
 				}
 			}
 #endif //] NTX_WFM_MODE_OPTIMIZED
 
-			DBG_MSG("ntx wfm mode %d->eink wfm mode %d @ mode 0x%02x\n",
-					upd_desc->upd_data.waveform_mode,giNTX_waveform_modeA[upd_desc->upd_data.waveform_mode],
-					bModeVersion);
+			DBG_MSG("ntx wfm mode %d->eink wfm mode %d x\n",
+					upd_desc->upd_data.waveform_mode,giNTX_waveform_modeA[upd_desc->upd_data.waveform_mode]);
 			upd_desc->upd_data.waveform_mode = giNTX_waveform_modeA[upd_desc->upd_data.waveform_mode];
 		}
 
@@ -3613,7 +3620,7 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	GALLEN_DBGLOCAL_BEGIN();
 
 	fake_s1d13522_progress_stop();
-
+	k_fake_s1d13522_wait_inited();
 
 #if 0 //[
 	// the command code will be 0x400446XX .
@@ -3828,9 +3835,16 @@ void mxc_epdc_fb_flush_updates(struct mxc_epdc_fb_data *fb_data)
 	 *   3) Active updates to panel - We can key off of EPDC
 	 *      power state to know if we have active updates.
 	 */
+#if 1
+	if ( (fb_data->power_state == POWER_STATE_ON) && 
+			(!list_empty(&fb_data->upd_pending_list) ||
+		!is_free_list_full(fb_data)) ) 
+#else
 	if (!list_empty(&fb_data->upd_pending_list) ||
 		!is_free_list_full(fb_data) ||
-		(fb_data->updates_active == true)) {
+		(fb_data->updates_active == true)) 
+#endif
+	{
 
 		GALLEN_DBGLOCAL_RUNLOG(0);
 
@@ -4772,6 +4786,8 @@ static void draw_mode0(struct mxc_epdc_fb_data *fb_data)
 	struct fb_var_screeninfo *screeninfo = &fb_data->epdc_fb_var;
 	u32 xres, yres;
 
+	GALLEN_DBGLOCAL_BEGIN();
+
 	upd_buf_ptr = (u32 *)fb_data->info.screen_base;
 
 	epdc_working_buf_intr(true);
@@ -4780,9 +4796,11 @@ static void draw_mode0(struct mxc_epdc_fb_data *fb_data)
 	/* Use unrotated (native) width/height */
 	if ((screeninfo->rotate == FB_ROTATE_CW) ||
 		(screeninfo->rotate == FB_ROTATE_CCW)) {
+		GALLEN_DBGLOCAL_RUNLOG(0);
 		xres = screeninfo->yres;
 		yres = screeninfo->xres;
 	} else {
+		GALLEN_DBGLOCAL_RUNLOG(1);
 		xres = screeninfo->xres;
 		yres = screeninfo->yres;
 	}
@@ -4791,8 +4809,10 @@ static void draw_mode0(struct mxc_epdc_fb_data *fb_data)
 	epdc_set_update_addr(fb_data->phys_start);
 	epdc_set_update_coord(0, 0);
 	epdc_set_update_dimensions(xres, yres);
-	if (fb_data->rev > 20)
+	if (fb_data->rev > 20) {
+		GALLEN_DBGLOCAL_RUNLOG(2);
 		epdc_set_update_stride(0);
+	}
 	epdc_submit_update(0, fb_data->wv_modes.mode_init, UPDATE_MODE_FULL,
 		false, true, 0xFF);
 
@@ -4803,6 +4823,7 @@ static void draw_mode0(struct mxc_epdc_fb_data *fb_data)
 	for (i = 0; i < 40; i++) {
 		if (!epdc_is_lut_active(0)) {
 			dev_dbg(fb_data->dev, "Mode0 init complete\n");
+			GALLEN_DBGLOCAL_ESC();
 			return;
 		}
 		msleep(100);
@@ -4810,6 +4831,7 @@ static void draw_mode0(struct mxc_epdc_fb_data *fb_data)
 
 	dev_err(fb_data->dev, "Mode0 init failed!\n");
 
+	GALLEN_DBGLOCAL_END();
 	return;
 }
 
@@ -5212,8 +5234,6 @@ int __devinit mxc_epdc_fb_probe(struct platform_device *pdev)
 		goto out;
 	}
 
-	DBG_MSG("[%s]epdc_fb_data@%p size=%d\n",
-			__FUNCTION__,fb_data,sizeof(struct mxc_epdc_fb_data));
 
 	/* Get platform data and check validity */
 	fb_data->pdata = pdev->dev.platform_data;
@@ -5223,6 +5243,10 @@ int __devinit mxc_epdc_fb_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto out_fbdata;
 	}
+
+	DBG_MSG("[%s]epdc_fb_data@%p size=%d,pdata@%p\n",
+			__FUNCTION__,fb_data,sizeof(struct mxc_epdc_fb_data),
+			fb_data->pdata);
 
 	if (fb_get_options(name, &options)) {
 		ret = -ENODEV;
@@ -5442,6 +5466,7 @@ int __devinit mxc_epdc_fb_probe(struct platform_device *pdev)
 
 	fb_data->auto_mode = AUTO_UPDATE_MODE_REGION_MODE;
 	fb_data->upd_scheme = UPDATE_SCHEME_QUEUE_AND_MERGE;
+	//fb_data->upd_scheme = UPDATE_SCHEME_SNAPSHOT;
 
 	/* Initialize our internal copy of the screeninfo */
 	fb_data->epdc_fb_var = *var_info;
@@ -5787,6 +5812,13 @@ int __devinit mxc_epdc_fb_probe(struct platform_device *pdev)
 
 
 	g_fb_data = fb_data;
+#if defined(DEFAULT_PANEL_HW_INIT) //[
+	ret = mxc_epdc_fb_init_hw((struct fb_info *)fb_data);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to initialize HW!\n");
+	}
+#endif //]
+
 	/* Register FB */
 	ret = register_framebuffer(info);
 	if (ret) {
@@ -5795,13 +5827,6 @@ int __devinit mxc_epdc_fb_probe(struct platform_device *pdev)
 		goto out_lutmap;
 	}
 
-
-#if defined(DEFAULT_PANEL_HW_INIT) //[
-	ret = mxc_epdc_fb_init_hw((struct fb_info *)fb_data);
-	if (ret) {
-		dev_err(&pdev->dev, "Failed to initialize HW!\n");
-	}
-#endif //]
 
 	goto out;
 
@@ -5934,8 +5959,11 @@ static int mxc_epdc_fb_remove(struct platform_device *pdev)
 #ifdef CONFIG_PM
 
 //#define SKIP_SUSPEND
+//
+#ifndef DO_NOT_POWEROFF //[
+	#define EPD_PMIC_SUSPEND			1
+#endif //] DO_NOT_POWEROFF
 
-#define EPD_PMIC_SUSPEND			1
 #define EPD_FL_SUSPEND				1
 //#define EPD_SUSPEND_BLANK			1
 
@@ -5945,7 +5973,7 @@ static int mxc_epdc_fb_suspend(struct platform_device *pdev, pm_message_t state)
 	GALLEN_DBGLOCAL_BEGIN();
 
 	struct mxc_epdc_fb_data *data = platform_get_drvdata(pdev);
-	int ret;
+	int ret=0;
 
 #ifdef SKIP_SUSPEND //[
 	return 0;

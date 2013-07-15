@@ -43,6 +43,9 @@
 
 #include "elcdif_regs.h"
 
+#define GDEBUG 10
+#include <linux/gallen_dbg.h>
+
 /*  ELCDIF Pixel format definitions */
 /*  Four-character-code (FOURCC) */
 #define fourcc(a, b, c, d) \
@@ -882,43 +885,61 @@ static int mxc_elcdif_fb_set_par(struct fb_info *fbi)
 	struct elcdif_signal_cfg sig_cfg;
 	int mem_len;
 
+	GALLEN_DBGLOCAL_BEGIN();
+
 	dev_dbg(fbi->device, "Reconfiguring framebuffer\n");
 
 	/* If parameter no change, don't reconfigure. */
-	if (mxc_elcdif_fb_par_equal(fbi, data) && (data->running == true))
+	if (mxc_elcdif_fb_par_equal(fbi, data) && (data->running == true)) {
+		GALLEN_DBGLOCAL_ESC();
 		return 0;
+	}
 
 	sema_init(&data->flip_sem, 1);
 
 	/* release prev panel */
 	if (!g_elcdif_pix_clk_enable) {
+		GALLEN_DBGLOCAL_RUNLOG(0);
 		clk_enable(g_elcdif_pix_clk);
+	printk("[GALLEN DBG][SKIP %s-%d]\n",__FUNCTION__,__LINE__);GALLEN_DBGLOCAL_ESC();return -EIO;
 		g_elcdif_pix_clk_enable = true;
 	}
+	printk("[GALLEN DBG][SKIP %s-%d]\n",__FUNCTION__,__LINE__);GALLEN_DBGLOCAL_ESC();return -EIO;
 	mxc_elcdif_blank_panel(FB_BLANK_POWERDOWN);
+	printk("[GALLEN DBG][SKIP %s-%d]\n",__FUNCTION__,__LINE__);GALLEN_DBGLOCAL_ESC();return -EIO;
 	mxc_elcdif_stop();
 	release_dotclk_panel();
 	mxc_elcdif_dma_release();
 	mxc_elcdif_fb_set_fix(fbi);
 	if (g_elcdif_pix_clk_enable) {
+		GALLEN_DBGLOCAL_RUNLOG(1);
 		clk_disable(g_elcdif_pix_clk);
 		g_elcdif_pix_clk_enable = false;
 	}
 
 	mem_len = fbi->var.yres_virtual * fbi->fix.line_length;
 	if (!fbi->fix.smem_start || (mem_len > fbi->fix.smem_len)) {
-		if (fbi->fix.smem_start)
+		GALLEN_DBGLOCAL_RUNLOG(2);
+		if (fbi->fix.smem_start) {
+			GALLEN_DBGLOCAL_RUNLOG(3);
 			mxc_elcdif_fb_unmap_video_memory(fbi);
+		}
 
-		if (mxc_elcdif_fb_map_video_memory(fbi) < 0)
+		if (mxc_elcdif_fb_map_video_memory(fbi) < 0) {
+			GALLEN_DBGLOCAL_ESC();
 			return -ENOMEM;
+		}
 	}
 
-	if (data->next_blank != FB_BLANK_UNBLANK)
+	if (data->next_blank != FB_BLANK_UNBLANK) {
+		GALLEN_DBGLOCAL_ESC();
 		return 0;
+	}
 
+	printk("[GALLEN DBG][SKIP %s-%d]\n",__FUNCTION__,__LINE__);return -EIO; // pass
 	/* init next panel */
 	if (!g_elcdif_pix_clk_enable) {
+		GALLEN_DBGLOCAL_RUNLOG(4);
 		clk_enable(g_elcdif_pix_clk);
 		g_elcdif_pix_clk_enable = true;
 	}
@@ -929,14 +950,27 @@ static int mxc_elcdif_fb_set_par(struct fb_info *fbi)
 		(u32) (PICOS2KHZ(fbi->var.pixclock) * 1000UL));
 
 	memset(&sig_cfg, 0, sizeof(sig_cfg));
-	if (fbi->var.sync & FB_SYNC_HOR_HIGH_ACT)
+	if (fbi->var.sync & FB_SYNC_HOR_HIGH_ACT) {
+		GALLEN_DBGLOCAL_RUNLOG(5);
 		sig_cfg.Hsync_pol = true;
-	if (fbi->var.sync & FB_SYNC_VERT_HIGH_ACT)
+	}
+
+	if (fbi->var.sync & FB_SYNC_VERT_HIGH_ACT) {
+		GALLEN_DBGLOCAL_RUNLOG(6);
 		sig_cfg.Vsync_pol = true;
-	if (fbi->var.sync & FB_SYNC_CLK_LAT_FALL)
+	}
+
+	if (fbi->var.sync & FB_SYNC_CLK_LAT_FALL) {
+		GALLEN_DBGLOCAL_RUNLOG(6);
 		sig_cfg.clk_pol = true;
-	if (!(fbi->var.sync & FB_SYNC_OE_LOW_ACT))
+	}
+
+	if (!(fbi->var.sync & FB_SYNC_OE_LOW_ACT)) {
+		GALLEN_DBGLOCAL_RUNLOG(7);
 		sig_cfg.enable_pol = true;
+	}
+
+	printk("[GALLEN DBG][SKIP %s-%d]\n",__FUNCTION__,__LINE__);return -EIO;
 
 	setup_dotclk_panel((PICOS2KHZ(fbi->var.pixclock)) * 1000UL,
 			   fbi->var.vsync_len,
@@ -961,6 +995,7 @@ static int mxc_elcdif_fb_set_par(struct fb_info *fbi)
 							 &fbi->modelist);
 	data->var = fbi->var;
 
+	GALLEN_DBGLOCAL_END();
 	return 0;
 }
 
@@ -1330,6 +1365,14 @@ static int mxc_elcdif_fb_probe(struct platform_device *pdev)
 
 	g_elcdif_dev = &pdev->dev;
 
+	{
+		g_elcdif_pix_clk = clk_get(g_elcdif_dev, "elcdif_pix");
+		clk_set_rate(g_elcdif_pix_clk, 25000000);
+		clk_enable(g_elcdif_pix_clk);
+		printk("[GALLEN DBG][SKIP %s-%d]\n",__FUNCTION__,__LINE__);
+		goto err0;
+	}
+
 	res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
 	if (res == NULL) {
 		dev_err(&pdev->dev, "cannot get IRQ resource\n");
@@ -1464,12 +1507,14 @@ static int mxc_elcdif_fb_probe(struct platform_device *pdev)
 			goto err3;
 	}
 
+
 	fbi->var.activate |= FB_ACTIVATE_FORCE;
 	console_lock();
 	fbi->flags |= FBINFO_MISC_USEREVENT;
 	ret = fb_set_var(fbi, &fbi->var);
 	fbi->flags &= ~FBINFO_MISC_USEREVENT;
 	console_unlock();
+
 
 	if (data->cur_blank == FB_BLANK_UNBLANK) {
 		console_lock();
@@ -1531,13 +1576,16 @@ static int mxc_elcdif_fb_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM
+//#ifdef CONFIG_PM
+#if 0
 static int mxc_elcdif_fb_suspend(struct platform_device *pdev,
 			       pm_message_t state)
 {
 	struct fb_info *fbi = platform_get_drvdata(pdev);
 	struct mxc_elcdif_fb_data *data = (struct mxc_elcdif_fb_data *)fbi->par;
 	int saved_blank;
+
+	GALLEN_DBGLOCAL_BEGIN();
 
 	console_lock();
 	fb_set_suspend(fbi, 1);
@@ -1560,6 +1608,8 @@ static int mxc_elcdif_fb_suspend(struct platform_device *pdev,
 	}
 	data->running = false;
 	console_unlock();
+
+	GALLEN_DBGLOCAL_END();
 	return 0;
 }
 
@@ -1568,10 +1618,12 @@ static int mxc_elcdif_fb_resume(struct platform_device *pdev)
 	struct fb_info *fbi = platform_get_drvdata(pdev);
 	struct mxc_elcdif_fb_data *data = (struct mxc_elcdif_fb_data *)fbi->par;
 
+	GALLEN_DBGLOCAL_BEGIN();
 	console_lock();
 	mxc_elcdif_fb_blank(data->next_blank, fbi);
 	fb_set_suspend(fbi, 0);
 	console_unlock();
+	GALLEN_DBGLOCAL_END();
 
 	return 0;
 }

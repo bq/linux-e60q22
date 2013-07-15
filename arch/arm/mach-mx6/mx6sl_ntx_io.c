@@ -37,6 +37,9 @@
 	#include "../../../drivers/input/keyboard/gpiofn.h"
 #endif //]GPIOFN_PWRKEY
 
+#include "../../../drivers/video/mxc/lk_tps65185.h"
+
+
 
 //#define _WIFI_ALWAYS_ON_	// wifi always on for startic
 
@@ -1252,6 +1255,9 @@ static int gpio_initials(void)
 	int irq, ret;
 	int error;
 	
+	power_key_timer.function = power_key_chk;
+	init_timer(&power_key_timer);
+
 	/* OFF_CHK */
 	#ifdef GPIOFN_PWRKEY//[
 	gpiofn_register(&gtNTX_PWR_GPIO_data);
@@ -1267,8 +1273,6 @@ static int gpio_initials(void)
 			enable_irq_wake(irq);
 	}
 	#endif //]GPIOFN_PWRKEY
-	power_key_timer.function = power_key_chk;
-	init_timer(&power_key_timer);
 	
 	gpio_direction_output(gMX6SL_IR_TOUCH_RST, 0);
 	msleep(20);
@@ -1308,20 +1312,29 @@ void ntx_gpio_suspend (void)
 
 	gpio_direction_input (gMX6SL_ACT_LED);
 	gpio_direction_input (gMX6SL_ON_LED);
+
+	gpio_direction_output (GPIO_EP_3V3_ON, 0);
+	tps65185_ONOFF(0);
+	//gpio_direction_output (MX6SL_EP_PWRALL, 0);
+	
+	
+	mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SCL__GPIO_3_14);
+	mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SDA__GPIO_3_15);
+	gpio_request(IMX_GPIO_NR(3, 14), "i2c2_scl");
+	gpio_request(IMX_GPIO_NR(3, 15), "i2c2_sda");
+	gpio_direction_output (IMX_GPIO_NR(3, 14), 0);
+	gpio_direction_output (IMX_GPIO_NR(3, 15), 0);
 	
 	if (gSleep_Mode_Suspend) {
-		// turn off interanl SD power.
-		mxc_iomux_v3_setup_multiple_pads(mx6sl_brd_ntx_sd4_gpio_pads, ARRAY_SIZE(mx6sl_brd_ntx_sd4_gpio_pads));
-		gpio_direction_output (GPIO_ISD_3V3_ON, 1);
-		
-		// turn off exteranl SD power.
-		mxc_iomux_v3_setup_multiple_pads(mx6sl_ntx_sd2_gpio_pads, ARRAY_SIZE(mx6sl_ntx_sd2_gpio_pads));
-		gpio_direction_output (GPIO_ESD_3V3_ON, 0);
-
 		// turn off ir touch power.
 		gpio_direction_output (gMX6SL_IR_TOUCH_INT, 0);
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__GPIO_3_12);
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SDA__GPIO_3_13);
+		gpio_request(IMX_GPIO_NR(3, 12), "i2c1_scl");
+		gpio_request(IMX_GPIO_NR(3, 13), "i2c1_sda");
+		gpio_direction_output (IMX_GPIO_NR(3, 12), 0);
+		gpio_direction_output (IMX_GPIO_NR(3, 13), 0);
+
 		gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
 		gpio_direction_output (GPIO_IR_3V3_ON, 0);
 	}
@@ -1331,22 +1344,25 @@ void ntx_gpio_suspend (void)
 void ntx_gpio_resume (void)
 {
 	if (gSleep_Mode_Suspend) {
-		// turn on interanl SD power.
-		gpio_direction_output (GPIO_ISD_3V3_ON, 0);
-		mxc_iomux_v3_setup_multiple_pads(mx6sl_brd_ntx_sd4_pads, ARRAY_SIZE(mx6sl_brd_ntx_sd4_pads));
-		
-		// turn on exteranl SD power.
-		gpio_direction_output (GPIO_ESD_3V3_ON, 1);
-		mxc_iomux_v3_setup_multiple_pads(mx6sl_ntx_sd2_wifi_pads, ARRAY_SIZE(mx6sl_ntx_sd2_wifi_pads));
-		
 		// turn on ir touch power.
 		gpio_direction_output (GPIO_IR_3V3_ON, 1);
+		gpio_free(IMX_GPIO_NR(3, 12));
+		gpio_free(IMX_GPIO_NR(3, 13));
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__I2C1_SCL);
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SDA__I2C1_SDA);
 		gpio_direction_input (gMX6SL_IR_TOUCH_INT);
 		mdelay (20);
 		gpio_direction_output (gMX6SL_IR_TOUCH_RST, 1);
 	}
+	
+	gpio_free(IMX_GPIO_NR(3, 14));
+	gpio_free(IMX_GPIO_NR(3, 15));
+	mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SCL__I2C2_SCL);
+	mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SDA__I2C2_SDA);
+
+	tps65185_ONOFF(1);
+	gpio_direction_output (GPIO_EP_3V3_ON, 1);
+	//gpio_direction_output (MX6SL_EP_PWRALL, 1);
 	
 	g_power_key_pressed = power_key_status();	// POWER key
 	if (g_power_key_pressed) 

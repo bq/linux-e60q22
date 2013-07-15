@@ -45,5 +45,6 @@ int tps65185_vcom_kickback_measurement(int *O_piVCOM_mv);
 int tps65185_suspend(void);
 void tps65185_resume(void);
 
-#endif //]LK_TPS65185_H
+int tps65185_ONOFF(int iIsON);
 
+#endif //]LK_TPS65185_H
