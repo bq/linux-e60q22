@@ -790,8 +790,10 @@ static struct zforce_ts_platdata zforce_ts_data = {
 };
 
 static struct i2c_board_info i2c_zforce_ir_touch_binfo = {
-	.type = "zforce-ir-touch",
+//	.type = "zforce-ir-touch",
+	.type = "zforce-ts",
 	.addr = 0x50,
+	.platform_data = &zforce_ts_data,
  	//.platform_data = MX6SL_IR_TOUCH_INT,
  	//.irq = gpio_to_irq(MX6SL_IR_TOUCH_INT),
 };
@@ -1919,8 +1921,12 @@ static void ntx_gpio_init(void)
 #endif
 	}
 
- 	i2c_zforce_ir_touch_binfo.platform_data = gMX6SL_IR_TOUCH_INT;
- 	i2c_zforce_ir_touch_binfo.irq = gpio_to_irq(gMX6SL_IR_TOUCH_INT);
+
+// 	i2c_zforce_ir_touch_binfo.platform_data = gMX6SL_IR_TOUCH_INT;
+	i2c_zforce_ir_touch_binfo.irq = gpio_to_irq(gMX6SL_IR_TOUCH_INT);
+
+	zforce_ts_data.gpio_int = gMX6SL_IR_TOUCH_INT;
+	zforce_ts_data.gpio_rst = gMX6SL_IR_TOUCH_RST;
 
 	i2c_sysmp_msp430_binfo.irq = gpio_to_irq(gMX6SL_MSP_INT);
 
@@ -1957,11 +1963,11 @@ static void ntx_gpio_init(void)
 	gpio_request (gMX6SL_PWR_SW, "MX6SL_PWR_SW");
 	gpio_direction_input (gMX6SL_PWR_SW);
 	
-	gpio_request (gMX6SL_IR_TOUCH_INT, "MX6SL_IR_TOUCH_INT");
-	gpio_direction_input (gMX6SL_IR_TOUCH_INT);
+//	gpio_request (gMX6SL_IR_TOUCH_INT, "MX6SL_IR_TOUCH_INT");
+//	gpio_direction_input (gMX6SL_IR_TOUCH_INT);
 	
-	gpio_request (gMX6SL_IR_TOUCH_RST, "MX6SL_IR_TOUCH_RST");
-	gpio_direction_input (gMX6SL_IR_TOUCH_RST);
+//	gpio_request (gMX6SL_IR_TOUCH_RST, "MX6SL_IR_TOUCH_RST");
+//	gpio_direction_input (gMX6SL_IR_TOUCH_RST);
 	
 	gpio_request (gMX6SL_HALL_EN, "MX6SL_HALL_EN");
 	gpio_direction_input (gMX6SL_HALL_EN);
@@ -2019,6 +2025,24 @@ static void __init mx6_ntx_init(void)
 	pu_reg_id = mx6sl_ntx_dvfscore_data.pu_id;
 	mx6_cpu_regulator_init();
 #endif
+
+	if(1==gptHWCFG->m_val.bDisplayResolution) {
+		// 1024x758 .
+		zforce_ts_data.x_max = 758;
+		zforce_ts_data.y_max = 1024;
+	} else if(2==gptHWCFG->m_val.bDisplayResolution) {
+		// 1024x768
+		zforce_ts_data.x_max = 768;
+		zforce_ts_data.y_max = 1024;
+	} else if(3==gptHWCFG->m_val.bDisplayResolution) {
+		// 1440x1080
+		zforce_ts_data.x_max = 1080;
+		zforce_ts_data.y_max = 1440;
+	} else {
+		// 800x600 
+		zforce_ts_data.x_max = 600;
+		zforce_ts_data.y_max = 800;
+	}
 
 	imx6q_add_imx_i2c(0, &mx6_ntx_i2c0_data);
 	imx6q_add_imx_i2c(1, &mx6_ntx_i2c1_data);

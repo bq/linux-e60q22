@@ -708,6 +708,10 @@ static int  ioctlDriver(struct file *filp, unsigned int command, unsigned long a
 			g_mxc_touch_triggered = 0;
       		break;	
 		case CM_POWER_KEY_RAW:
+/*			if ((6 == check_hardware_name()) || (2 == check_hardware_name())) 		// E60632 || E50602
+				i = (gpio_get_value (GPIO_PWR_SW))?1:0;	// POWER key
+			else
+				i = (gpio_get_value (GPIO_PWR_SW))?0:1;	// POWER key */
 			i = power_key_status();
 			copy_to_user((void __user *)arg, &i, sizeof(unsigned long));
       		break;
@@ -1280,9 +1284,9 @@ static int gpio_initials(void)
 	}
 	#endif //]GPIOFN_PWRKEY
 	
-	gpio_direction_output(gMX6SL_IR_TOUCH_RST, 0);
+/*	gpio_direction_output(gMX6SL_IR_TOUCH_RST, 0);
 	msleep(20);
-	gpio_direction_input(gMX6SL_IR_TOUCH_RST);
+	gpio_direction_input(gMX6SL_IR_TOUCH_RST); */
 
 	// MX6SL_FL_EN
 	if( 0 != gptHWCFG->m_val.bFrontLight ){
@@ -1333,7 +1337,7 @@ void ntx_gpio_suspend (void)
 	
 	if (gSleep_Mode_Suspend) {
 		// turn off ir touch power.
-		gpio_direction_output (gMX6SL_IR_TOUCH_INT, 0);
+//		gpio_direction_output (gMX6SL_IR_TOUCH_INT, 0);
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__GPIO_3_12);
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SDA__GPIO_3_13);
 		gpio_request(IMX_GPIO_NR(3, 12), "i2c1_scl");
@@ -1341,7 +1345,7 @@ void ntx_gpio_suspend (void)
 		gpio_direction_output (IMX_GPIO_NR(3, 12), 0);
 		gpio_direction_output (IMX_GPIO_NR(3, 13), 0);
 
-		gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
+//		gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
 		gpio_direction_output (GPIO_IR_3V3_ON, 0);
 	}
 
@@ -1356,9 +1360,9 @@ void ntx_gpio_resume (void)
 		gpio_free(IMX_GPIO_NR(3, 13));
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__I2C1_SCL);
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SDA__I2C1_SDA);
-		gpio_direction_input (gMX6SL_IR_TOUCH_INT);
-		mdelay (20);
-		gpio_direction_output (gMX6SL_IR_TOUCH_RST, 1);
+//		gpio_direction_input (gMX6SL_IR_TOUCH_INT);
+//		mdelay (20);
+//		gpio_direction_output (gMX6SL_IR_TOUCH_RST, 1);
 	}
 	
 	gpio_free(IMX_GPIO_NR(3, 14));
@@ -1383,12 +1387,12 @@ void ntx_gpio_resume (void)
 	}
 }
 
-void ntx_gpio_touch_reset (void)
+/*void ntx_gpio_touch_reset (void)
 {
 	gpio_direction_output(gMX6SL_IR_TOUCH_RST, 0);
 	msleep (10);
 	gpio_direction_output(gMX6SL_IR_TOUCH_RST, 1);
-}
+}*/
 
 void ntx_msp430_i2c_force_release (void)
 {
