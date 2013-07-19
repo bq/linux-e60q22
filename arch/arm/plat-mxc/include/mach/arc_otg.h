@@ -19,6 +19,8 @@
 #ifndef __ASM_ARCH_MXC_ARC_OTG_H__
 #define __ASM_ARCH_MXC_ARC_OTG_H__
 
+#include <linux/usb/fsl_xcvr.h>
+
 #ifdef CONFIG_ARCH_MX3
 extern volatile u32 *mx3_usb_otg_addr;
 #define OTG_BASE_ADDR		mx3_usb_otg_addr
