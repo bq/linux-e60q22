@@ -664,6 +664,7 @@ void gpiokeys_report_key(int isDown,__u16 wKeyCode)
 {
 	if (pindev) {
 		input_event(pindev, EV_KEY, wKeyCode, isDown);
+		input_sync(pindev);
 	}
 }
 
