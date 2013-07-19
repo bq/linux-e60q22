@@ -1179,16 +1179,13 @@ static void power_key_chk(unsigned long v)
 	int iPwrKeyState=power_key_status();
 	if (iPwrKeyState) {
 		++g_power_key_debounce;
-		if ((2 == g_power_key_debounce) && gIsCustomerUi) {
+		if ((2 == g_power_key_debounce)) {
 			ntx_report_power(1);
 		}
 		mod_timer(&power_key_timer, jiffies + 1);
 	}
-	else if (gIsCustomerUi) {
-		ntx_report_power(0);
-	}
 	else {
-		//printk(KERN_ERR "%s(%d):exception power key status !\n",__FILE__,__LINE__);
+		ntx_report_power(0);
 	}
 
 #if 0 //[ debug code .
@@ -1276,7 +1273,7 @@ static int gpio_initials(void)
 	{
 		/* Set power key as wakeup resource */
 		irq = gpio_to_irq(gMX6SL_PWR_SW);
-		ret = request_irq(irq, power_key_int, IRQF_TRIGGER_FALLING, "power_key", 0);
+		ret = request_irq(irq, power_key_int, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, "power_key", 0);
 		if (ret)
 			pr_info("register on-off key interrupt failed\n");
 		else
