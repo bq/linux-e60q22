@@ -1893,17 +1893,6 @@ int tps65185_suspend(void)
 	//TPS65185_REG_SET(INT_EN1,ALL,bVal);
 	//TPS65185_REG_SET(INT_EN2,ALL,bVal);
 	//TPS65185_REG_SET(ENABLE,ALL,bVal);
-#ifdef TPS65185_PWR_ONOFF_INT//[
-
-	irq = gpio_to_irq(GPIO_TPS65185_INT);
-	free_irq(irq,0);
-	//disable_irq(irq);
-	irq = gpio_to_irq(GPIO_TPS65185_PWRGOOD);
-	free_irq(irq,0);
-	//disable_irq(irq);
-
-#endif //] TPS65185_PWR_ONOFF_INT
-
 
 	dwTPS65185_mode = TPS65185_MODE_SLEEP;
 	tps65185_chg_mode(&dwTPS65185_mode,1);
@@ -1914,6 +1903,16 @@ int tps65185_suspend(void)
 		//tps65185_resume();
 	}
 
+#ifdef TPS65185_PWR_ONOFF_INT//[
+
+	irq = gpio_to_irq(GPIO_TPS65185_INT);
+	free_irq(irq,0);
+	//disable_irq(irq);
+	irq = gpio_to_irq(GPIO_TPS65185_PWRGOOD);
+	free_irq(irq,0);
+	//disable_irq(irq);
+
+#endif //] TPS65185_PWR_ONOFF_INT
 
 #if 0
 	if(gSleep_Mode_Suspend) {
