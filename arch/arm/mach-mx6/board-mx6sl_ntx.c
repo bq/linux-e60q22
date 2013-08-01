@@ -1658,11 +1658,11 @@ static struct platform_device lcd_wvga_device = {
 }
 
 static struct gpio_keys_button gpio_key_matrix_FL[] = {
-	GPIO_BUTTON(GPIO_KB_ROW0, 90, 1, "front_light", 1),			// Front light
+//	GPIO_BUTTON(GPIO_KB_ROW0, 90, 1, "front_light", 1),			// Front light
 };
 
 static struct gpio_keys_button gpio_key_HOME_FL[] = {
-	GPIO_BUTTON(GPIO_KB_COL1, 90, 1, "front_light", 1),			// Front light
+//	GPIO_BUTTON(GPIO_KB_COL1, 90, 1, "front_light", 1),			// Front light
 	GPIO_BUTTON(GPIO_KB_COL0, 61, 1, "home", 1),			// home
 };
 
