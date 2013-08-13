@@ -63,9 +63,8 @@
 #include <linux/gallen_dbg.h>
 
 //#define DO_NOT_POWEROFF				1
-//#define NTX_WFM_MODE_OPTIMIZED 1
+#define NTX_WFM_MODE_OPTIMIZED 1
 
-#define MX50_IOCTL_IF	1
 
 /*
  * Enable this define to have a default panel
@@ -670,8 +669,22 @@ static void epdc_set_update_stride(u32 stride)
 static void epdc_submit_update(u32 lut_num, u32 waveform_mode, u32 update_mode,
 			       bool use_dry_run, bool use_test_mode, u32 np_val)
 {
+	volatile static int giLast_waveform_mode=-1;
 	u32 reg_val = 0;
 
+
+	if(giLast_waveform_mode!=waveform_mode) {
+		if( g_fb_data->wv_modes.mode_a2==waveform_mode &&
+				g_fb_data->wv_modes.mode_du!=giLast_waveform_mode) 
+		{
+			waveform_mode=g_fb_data->wv_modes.mode_du;
+			DBG_MSG("%s():waveform mode has been force chage to DU before A2\n",__FUNCTION__);
+		}
+
+		DBG_MSG("%s(%d):%s(),lut=%d,wf_mode=%d,last_wf_mode=%d,upd_mode=%d,test=%d,np_val=%d\n",
+			__FILE__,__LINE__,__FUNCTION__,lut_num,waveform_mode,giLast_waveform_mode,update_mode,use_test_mode,np_val);
+	}
+	
 	if (use_test_mode) {
 		reg_val |=
 		    ((np_val << EPDC_UPD_FIXED_FIXNP_OFFSET) &
@@ -684,12 +697,14 @@ static void epdc_submit_update(u32 lut_num, u32 waveform_mode, u32 update_mode,
 		__raw_writel(reg_val, EPDC_UPD_FIXED);
 	}
 
-	if (waveform_mode == WAVEFORM_MODE_AUTO)
+	if (waveform_mode == WAVEFORM_MODE_AUTO) {
 		reg_val |= EPDC_UPD_CTRL_AUTOWV;
-	else
+	}
+	else {
 		reg_val |= ((waveform_mode <<
 				EPDC_UPD_CTRL_WAVEFORM_MODE_OFFSET) &
 				EPDC_UPD_CTRL_WAVEFORM_MODE_MASK);
+	}
 
 	reg_val |= (use_dry_run ? EPDC_UPD_CTRL_DRY_RUN : 0) |
 	    ((lut_num << EPDC_UPD_CTRL_LUT_SEL_OFFSET) &
@@ -697,6 +712,9 @@ static void epdc_submit_update(u32 lut_num, u32 waveform_mode, u32 update_mode,
 	    update_mode;
 
 	__raw_writel(reg_val, EPDC_UPD_CTRL);
+
+	giLast_waveform_mode = waveform_mode;
+
 }
 
 static inline bool epdc_is_lut_complete(int rev, u32 lut_num)
@@ -774,11 +792,11 @@ static inline int epdc_get_next_lut(void)
 
 static int epdc_choose_next_lut(int rev, int *next_lut)
 {
-	u64 luts_status, unprocessed_luts;
-	bool next_lut_found = false;
+	u64 luts_status, unprocessed_luts, used_luts;
 	/* Available LUTs are reduced to 16 in 5-bit waveform mode */
-	u32 format_p5n = __raw_readl(EPDC_FORMAT) &
-		EPDC_FORMAT_BUF_PIXEL_FORMAT_P5N;
+	bool format_p5n = ((__raw_readl(EPDC_FORMAT) &
+	EPDC_FORMAT_BUF_PIXEL_FORMAT_MASK) ==
+	EPDC_FORMAT_BUF_PIXEL_FORMAT_P5N);
 
 	luts_status = __raw_readl(EPDC_STATUS_LUTS);
 	if ((rev < 20) || format_p5n)
@@ -795,48 +813,43 @@ static int epdc_choose_next_lut(int rev, int *next_lut)
 			unprocessed_luts &= 0xFFFF;
 	}
 
-	while (!next_lut_found) {
-		/*
-		 * Selecting a LUT to minimize incidence of TCE Underrun Error
-		 * --------------------------------------------------------
-		 * We want to find the lowest order LUT that is of greater
-		 * order than all other active LUTs.  If highest order LUT
-		 * is active, then we want to choose the lowest order
-		 * available LUT.
-		 *
-		 * NOTE: For EPDC version 2.0 and later, TCE Underrun error
-		 *       bug is fixed, so it doesn't matter which LUT is used.
-		 */
-		*next_lut = fls64(luts_status);
+	/*
+	 * Note on unprocessed_luts: There is a race condition
+	 * where a LUT completes, but has not been processed by
+	 * IRQ handler workqueue, and then a new update request
+	 * attempts to use that LUT.  We prevent that here by
+	 * ensuring that the LUT we choose doesn't have its IRQ
+	 * bit set (indicating it has completed but not yet been
+	 * processed).
+	 */
+	used_luts = luts_status | unprocessed_luts;
 
-		if ((rev < 20) || format_p5n) {
-			if (*next_lut > 15)
-				*next_lut = ffz(luts_status);
-		} else {
-			if (*next_lut > 63) {
-				*next_lut = ffz((u32)luts_status);
-				if (*next_lut == -1)
-					*next_lut =
-						ffz((u32)(luts_status >> 32)) + 32;
-			}
-		}
+	/*
+	 * Selecting a LUT to minimize incidence of TCE Underrun Error
+	 * --------------------------------------------------------
+	 * We want to find the lowest order LUT that is of greater
+	 * order than all other active LUTs.  If highest order LUT
+	 * is active, then we want to choose the lowest order
+	 * available LUT.
+	 *
+	 * NOTE: For EPDC version 2.0 and later, TCE Underrun error
+	 *       bug is fixed, so it doesn't matter which LUT is used.
+	 */
 
-		/*
-		 * Note on unprocessed_luts: There is a race condition
-		 * where a LUT completes, but has not been processed by
-		 * IRQ handler workqueue, and then a new update request
-		 * attempts to use that LUT.  We prevent that here by
-		 * ensuring that the LUT we choose doesn't have its IRQ
-		 * bit set (indicating it has completed but not yet been
-		 * processed).
-		 */
-		if ((1 << *next_lut) & unprocessed_luts)
-			luts_status |= (1 << *next_lut);
+	if ((rev < 20) || format_p5n) {
+		*next_lut = fls64(used_luts);
+		if (*next_lut > 15)
+			*next_lut = ffz(used_luts);
+	} else {
+		if ((u32)used_luts != ~0UL)
+			*next_lut = ffz((u32)used_luts);
+		else if ((u32)(used_luts >> 32) != ~0UL)
+			*next_lut = ffz((u32)(used_luts >> 32)) + 32;
 		else
-			next_lut_found = true;
+			*next_lut = INVALID_LUT;
 	}
 
-	if (luts_status & 0x8000)
+	if (used_luts & 0x8000)
 		return 1;
 	else
 		return 0;
@@ -2555,7 +2568,7 @@ static int epdc_submit_merge(struct update_desc_list *upd_desc_list,
 	/* Merged update should take on the earliest order */
 	upd_desc_list->update_order =
 		(upd_desc_list->update_order > update_to_merge->update_order) ?
-		update_to_merge->update_order : upd_desc_list->update_order;
+		upd_desc_list->update_order : update_to_merge->update_order;
 
 	return MERGE_OK;
 }
@@ -3824,9 +3837,8 @@ void mxc_epdc_fb_flush_updates(struct mxc_epdc_fb_data *fb_data)
 	 */
 #if 1
 	if ( (fb_data->power_state == POWER_STATE_ON) && 
-		(!list_empty(&fb_data->upd_pending_list) ||
-		!is_free_list_full(fb_data) ||
-		fb_data->updates_active) ) 
+			(!list_empty(&fb_data->upd_pending_list) ||
+		!is_free_list_full(fb_data)) ) 
 #else
 	if (!list_empty(&fb_data->upd_pending_list) ||
 		!is_free_list_full(fb_data) ||
@@ -6056,7 +6068,7 @@ static int mxc_epdc_fb_resume(struct platform_device *pdev)
 	mxc_epdc_fb_blank(FB_BLANK_UNBLANK, &data->info);
 #endif//] EPD_SUSPEND_BLANK
 
-	epdc_init_settings(data);
+	//epdc_init_settings(data);
 	
 	data->updates_active = false;
 
