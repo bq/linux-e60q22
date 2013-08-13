@@ -104,6 +104,8 @@ static int csi_enc_setup(cam_data *cam)
 
 	if (cam->v2f.fmt.pix.pixelformat == V4L2_PIX_FMT_YUV420)
 		pixel_fmt = IPU_PIX_FMT_YUV420P;
+	else if (cam->v2f.fmt.pix.pixelformat == V4L2_PIX_FMT_YVU420)
+		pixel_fmt = IPU_PIX_FMT_YVU420P;
 	else if (cam->v2f.fmt.pix.pixelformat == V4L2_PIX_FMT_YUV422P)
 		pixel_fmt = IPU_PIX_FMT_YUV422P;
 	else if (cam->v2f.fmt.pix.pixelformat == V4L2_PIX_FMT_UYVY)
@@ -171,7 +173,8 @@ static int csi_enc_setup(cam_data *cam)
 	err = ipu_init_channel_buffer(cam->ipu, CSI_MEM, IPU_OUTPUT_BUFFER,
 				      pixel_fmt, cam->v2f.fmt.pix.width,
 				      cam->v2f.fmt.pix.height,
-				      cam->v2f.fmt.pix.width, IPU_ROTATE_NONE,
+				      cam->v2f.fmt.pix.bytesperline,
+				      IPU_ROTATE_NONE,
 				      dummy, dummy, 0,
 				      cam->offset.u_offset,
 				      cam->offset.v_offset);

@@ -1577,12 +1577,10 @@ static void setup_spdc(void)
 
 static void imx6_ntx_usbotg_vbus(bool on)
 {
-#if 0
-	if (on)
-		gpio_set_value(MX6_BRD_USBOTG1_PWR, 1);
-	else
-		gpio_set_value(MX6_BRD_USBOTG1_PWR, 0);
-#endif
+}
+
+static void imx6_ntx_usbh1_vbus(bool on)
+{
 }
 
 static void __init mx6_ntx_init_usb(void)
@@ -1611,14 +1609,14 @@ static void __init mx6_ntx_init_usb(void)
 #endif
 
 	mx6_set_otghost_vbus_func(imx6_ntx_usbotg_vbus);
-	mx6_usb_dr_init();
+	mx6_set_host1_vbus_func(imx6_ntx_usbh1_vbus);
 #ifdef CONFIG_USB_EHCI_ARC_HSIC
 	mx6_usb_h2_init();
 #endif
 }
 
 static struct platform_pwm_backlight_data mx6_ntx_pwm_backlight_data = {
-	.pwm_id		= 0,
+	.pwm_id		= 1,
 	.max_brightness	= 255,
 	.dft_brightness	= 128,
 	.pwm_period_ns	= 50000,
@@ -1647,7 +1645,7 @@ static struct platform_device lcd_wvga_device = {
 
 
 #if defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE)
-#define GPIO_BUTTON(gpio_num, ev_code, act_low, descr, wake)	\
+#define GPIO_BUTTON(gpio_num, ev_code, act_low, descr, wake, interval)	\
 {								\
 	.gpio		= gpio_num,				\
 	.type		= EV_KEY,				\
@@ -1655,15 +1653,20 @@ static struct platform_device lcd_wvga_device = {
 	.active_low	= act_low,				\
 	.desc		= "btn " descr,				\
 	.wakeup		= wake,					\
+	.debounce_interval	= interval,		\
 }
 
 static struct gpio_keys_button gpio_key_matrix_FL[] = {
-//	GPIO_BUTTON(GPIO_KB_ROW0, 90, 1, "front_light", 1),			// Front light
+//	GPIO_BUTTON(GPIO_KB_ROW0, 90, 1, "front_light", 1, 50),			// Front light
 };
 
 static struct gpio_keys_button gpio_key_HOME_FL[] = {
-//	GPIO_BUTTON(GPIO_KB_COL1, 90, 1, "front_light", 1),			// Front light
-	GPIO_BUTTON(GPIO_KB_COL0, 61, 1, "home", 1),			// home
+//	GPIO_BUTTON(GPIO_KB_COL1, 90, 1, "front_light", 1, 50),			// Front light
+	GPIO_BUTTON(GPIO_KB_COL0, 61, 1, "home", 1, 50),			// home
+};
+
+static struct gpio_keys_button gpio_key_HOME[] = {
+	GPIO_BUTTON(GPIO_KB_COL0, 61, 1, "home", 1, 50),			// home
 };
 
 static struct gpio_keys_platform_data ntx_gpio_key_data = {
@@ -2062,8 +2065,8 @@ static void __init mx6_ntx_init(void)
 //	imx6q_add_imx_snvs_rtc();
 
 	/* SPI */
-	imx6q_add_ecspi(0, &mx6_ntx_spi_data);
-	spi_device_init();
+//	imx6q_add_ecspi(0, &mx6_ntx_spi_data);
+//	spi_device_init();
 
 //	mx6sl_ntx_init_pfuze100(0);
 	imx6q_add_anatop_thermal_imx(1, &mx6sl_anatop_thermal_data);
@@ -2118,7 +2121,7 @@ static void __init mx6_ntx_init(void)
 
 	mx6_ntx_init_usb();
 	imx6q_add_otp();
-	imx6q_add_mxc_pwm(0);
+//	imx6q_add_mxc_pwm(1);
 //	imx6q_add_mxc_pwm_backlight(0, &mx6_ntx_pwm_backlight_data);
 
 
@@ -2165,6 +2168,10 @@ static void __init mx6_ntx_init(void)
 
 			ntx_gpio_key_data.buttons = gpio_key_matrix_FL;
 			ntx_gpio_key_data.nbuttons = ARRAY_SIZE(gpio_key_matrix_FL);
+			break;
+		case 33://E60Q2X
+			ntx_gpio_key_data.buttons = gpio_key_HOME;
+			ntx_gpio_key_data.nbuttons = ARRAY_SIZE(gpio_key_HOME);
 			break;
 		default:
 			ntx_gpio_key_data.buttons = gpio_key_HOME_FL;

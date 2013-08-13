@@ -1,7 +1,7 @@
 /*
  * MXC SPDIF ALSA Soc Codec Driver
  *
- * Copyright (C) 2007-2012 Freescale Semiconductor, Inc.
+ * Copyright (C) 2007-2013 Freescale Semiconductor, Inc.
  */
 
 /*
@@ -849,12 +849,20 @@ static int mxc_pb_spdif_get(struct snd_kcontrol *kcontrol,
 static int mxc_pb_spdif_put(struct snd_kcontrol *kcontrol,
 			    struct snd_ctl_elem_value *uvalue)
 {
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct mxc_spdif_priv *spdif_priv = snd_soc_codec_get_drvdata(codec);
+	struct mxc_spdif_platform_data *plat_data = spdif_priv->plat_data;
+
 	mxc_spdif_control.ch_status[0] = uvalue->value.iec958.status[0];
 	mxc_spdif_control.ch_status[1] = uvalue->value.iec958.status[1];
 	mxc_spdif_control.ch_status[2] = uvalue->value.iec958.status[2];
 	mxc_spdif_control.ch_status[3] = uvalue->value.iec958.status[3];
 
+	clk_enable(plat_data->spdif_clk);
+
 	spdif_write_channel_status();
+
+	clk_disable(plat_data->spdif_clk);
 
 	return 0;
 }
@@ -873,7 +881,12 @@ static int mxc_spdif_info(struct snd_kcontrol *kcontrol,
 static int mxc_spdif_capture_get(struct snd_kcontrol *kcontrol,
 				 struct snd_ctl_elem_value *ucontrol)
 {
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct mxc_spdif_priv *spdif_priv = snd_soc_codec_get_drvdata(codec);
+	struct mxc_spdif_platform_data *plat_data = spdif_priv->plat_data;
 	unsigned int cstatus;
+
+	clk_enable(plat_data->spdif_clk);
 
 	if (!(__raw_readl(spdif_base_addr + SPDIF_REG_SIS) & INT_CNEW))
 		return -EAGAIN;
@@ -889,6 +902,8 @@ static int mxc_spdif_capture_get(struct snd_kcontrol *kcontrol,
 
 	/* clear intr */
 	__raw_writel(INT_CNEW, spdif_base_addr + SPDIF_REG_SIC);
+
+	clk_disable(plat_data->spdif_clk);
 
 	return 0;
 }
@@ -972,11 +987,18 @@ static int mxc_spdif_vbit_info(struct snd_kcontrol *kcontrol,
 static int mxc_spdif_vbit_get(struct snd_kcontrol *kcontrol,
 			      struct snd_ctl_elem_value *ucontrol)
 {
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct mxc_spdif_priv *spdif_priv = snd_soc_codec_get_drvdata(codec);
+	struct mxc_spdif_platform_data *plat_data = spdif_priv->plat_data;
 	unsigned int int_val;
+
+	clk_enable(plat_data->spdif_clk);
 
 	int_val = __raw_readl(spdif_base_addr + SPDIF_REG_SIS);
 	ucontrol->value.integer.value[0] = (int_val & INT_VAL_NOGOOD) != 0;
 	__raw_writel(INT_VAL_NOGOOD, spdif_base_addr + SPDIF_REG_SIC);
+
+	clk_disable(plat_data->spdif_clk);
 
 	return 0;
 }
@@ -1008,9 +1030,11 @@ static int mxc_spdif_rxrate_get(struct snd_kcontrol *kcontrol,
 	struct mxc_spdif_platform_data *plat_data = spdif_priv->plat_data;
 
 	if (atomic_read(&spdif_priv->dpll_locked)) {
+		clk_enable(plat_data->spdif_clk);
 		ucontrol->value.integer.value[0] =
 		    spdif_get_rxclk_rate(plat_data->spdif_clk,
 					 SPDIF_DEFAULT_GAINSEL);
+		clk_disable(plat_data->spdif_clk);
 	} else {
 		ucontrol->value.integer.value[0] = 0;
 	}
@@ -1038,9 +1062,18 @@ static int mxc_spdif_usync_info(struct snd_kcontrol *kcontrol,
 static int mxc_spdif_usync_get(struct snd_kcontrol *kcontrol,
 			       struct snd_ctl_elem_value *ucontrol)
 {
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct mxc_spdif_priv *spdif_priv = snd_soc_codec_get_drvdata(codec);
+	struct mxc_spdif_platform_data *plat_data = spdif_priv->plat_data;
 	unsigned int int_val;
+
+	clk_enable(plat_data->spdif_clk);
+
 	int_val = __raw_readl(spdif_base_addr + SPDIF_REG_SRCD);
 	ucontrol->value.integer.value[0] = (int_val & SRCD_CD_USER) != 0;
+
+	clk_disable(plat_data->spdif_clk);
+
 	return 0;
 }
 
@@ -1052,10 +1085,18 @@ static int mxc_spdif_usync_get(struct snd_kcontrol *kcontrol,
 static int mxc_spdif_usync_put(struct snd_kcontrol *kcontrol,
 				   struct snd_ctl_elem_value *ucontrol)
 {
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct mxc_spdif_priv *spdif_priv = snd_soc_codec_get_drvdata(codec);
+	struct mxc_spdif_platform_data *plat_data = spdif_priv->plat_data;
 	unsigned int int_val;
+
+	clk_enable(plat_data->spdif_clk);
 
 	int_val = ucontrol->value.integer.value[0] << SRCD_CD_USER_OFFSET;
 	__raw_writel(int_val, spdif_base_addr + SPDIF_REG_SRCD);
+
+	clk_disable(plat_data->spdif_clk);
+
 	return 0;
 }
 

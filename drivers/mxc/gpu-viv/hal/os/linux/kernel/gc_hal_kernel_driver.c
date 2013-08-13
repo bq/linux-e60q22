@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2012 by Vivante Corp.
+*    Copyright (C) 2005 - 2013 by Vivante Corp.
 *    Copyright (C) 2011-2012 Freescale Semiconductor, Inc.
 *
 *    This program is free software; you can redistribute it and/or modify
@@ -20,12 +20,9 @@
 *****************************************************************************/
 
 
-
-
 #include <linux/device.h>
 #include <linux/slab.h>
-#include <mach/viv_gpu.h>
-
+#include <linux/notifier.h>
 #include "gc_hal_kernel_linux.h"
 #include "gc_hal_driver.h"
 
@@ -41,11 +38,46 @@
 
 #ifdef CONFIG_ANDROID_RESERVED_MEMORY_ACCOUNT
 #    include <linux/resmem_account.h>
+#    include <linux/kernel.h>
+#    include <linux/mm.h>
+#    include <linux/oom.h>
+#    include <linux/sched.h>
+#    include <linux/notifier.h>
+
+struct task_struct *lowmem_deathpending;
+
+static int
+task_notify_func(struct notifier_block *self, unsigned long val, void *data);
+
+static struct notifier_block task_nb = {
+	.notifier_call	= task_notify_func,
+};
+
+static int
+task_notify_func(struct notifier_block *self, unsigned long val, void *data)
+{
+	struct task_struct *task = data;
+
+	if (task == lowmem_deathpending)
+		lowmem_deathpending = NULL;
+
+	return NOTIFY_OK;
+}
 #endif
 
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
+#include <mach/viv_gpu.h>
+#else
+#include <linux/pm_runtime.h>
+#include <mach/busfreq.h>
+#endif
 /* Zone used for header/footer. */
 #define _GC_OBJ_ZONE    gcvZONE_DRIVER
+
+#if gcdENABLE_FSCALE_VAL_ADJUST
+extern int register_thermal_notifier(struct notifier_block *nb);
+extern int unregister_thermal_notifier(struct notifier_block *nb);
+#endif
 
 MODULE_DESCRIPTION("Vivante Graphics Driver");
 MODULE_LICENSE("GPL");
@@ -146,6 +178,9 @@ static struct file_operations driver_fops =
     .open       = drv_open,
     .release    = drv_release,
     .unlocked_ioctl = drv_ioctl,
+#ifdef HAVE_COMPAT_IOCTL
+    .compat_ioctl = drv_ioctl,
+#endif
     .mmap       = drv_mmap,
 };
 
@@ -458,7 +493,7 @@ long drv_ioctl(
     }
 
     copyLen = copy_from_user(
-        &iface, drvArgs.InputBuffer, sizeof(gcsHAL_INTERFACE)
+        &iface, gcmUINT64_TO_PTR(drvArgs.InputBuffer), sizeof(gcsHAL_INTERFACE)
         );
 
     if (copyLen != 0)
@@ -495,7 +530,7 @@ long drv_ioctl(
         }
 
         iface.u.ChipInfo.count = count;
-        status = gcvSTATUS_OK;
+        iface.status = status = gcvSTATUS_OK;
     }
     else
     {
@@ -536,25 +571,26 @@ long drv_ioctl(
 
     if (gcmIS_SUCCESS(status) && (iface.command == gcvHAL_LOCK_VIDEO_MEMORY))
     {
+        gcuVIDMEM_NODE_PTR node = gcmUINT64_TO_PTR(iface.u.LockVideoMemory.node);
         /* Special case for mapped memory. */
         if ((data->mappedMemory != gcvNULL)
-        &&  (iface.u.LockVideoMemory.node->VidMem.memory->object.type == gcvOBJ_VIDMEM)
+        &&  (node->VidMem.memory->object.type == gcvOBJ_VIDMEM)
         )
         {
             /* Compute offset into mapped memory. */
             gctUINT32 offset
-                = (gctUINT8 *) iface.u.LockVideoMemory.memory
+                = (gctUINT8 *) gcmUINT64_TO_PTR(iface.u.LockVideoMemory.memory)
                 - (gctUINT8 *) device->contiguousBase;
 
             /* Compute offset into user-mapped region. */
             iface.u.LockVideoMemory.memory =
-                (gctUINT8 *) data->mappedMemory + offset;
+                gcmPTR_TO_UINT64((gctUINT8 *) data->mappedMemory + offset);
         }
     }
 
     /* Copy data back to the user. */
     copyLen = copy_to_user(
-        drvArgs.OutputBuffer, &iface, sizeof(gcsHAL_INTERFACE)
+        gcmUINT64_TO_PTR(drvArgs.OutputBuffer), &iface, sizeof(gcsHAL_INTERFACE)
         );
 
     if (copyLen != 0)
@@ -582,7 +618,7 @@ static int drv_mmap(
     struct vm_area_struct* vma
     )
 {
-    gceSTATUS status;
+    gceSTATUS status = gcvSTATUS_OK;
     gcsHAL_PRIVATE_DATA_PTR data;
     gckGALDEVICE device;
 
@@ -650,7 +686,7 @@ static int drv_mmap(
         ret = io_remap_pfn_range(
             vma,
             vma->vm_start,
-            (gctUINT32) device->contiguousPhysical >> PAGE_SHIFT,
+            device->requestedContiguousBase >> PAGE_SHIFT,
             size,
             vma->vm_page_prot
             );
@@ -670,11 +706,12 @@ static int drv_mmap(
         }
 
         data->mappedMemory = (gctPOINTER) vma->vm_start;
+
+        /* Success. */
+        gcmkFOOTER_NO();
+        return 0;
     }
 
-    /* Success. */
-    gcmkFOOTER_NO();
-    return 0;
 
 OnError:
     gcmkFOOTER();
@@ -685,7 +722,7 @@ OnError:
 #if !USE_PLATFORM_DRIVER
 static int __init drv_init(void)
 #else
-static int drv_init(void)
+static int drv_init(struct device *pdev)
 #endif
 {
     int ret;
@@ -792,6 +829,7 @@ static int drv_init(void)
         contiguousBase, contiguousSize,
         bankSize, fastClear, compression, baseAddress, physSize, signal,
         logFileSize,
+        pdev,
         &device
         ));
 
@@ -819,6 +857,7 @@ static int drv_init(void)
     }
 
 #ifdef CONFIG_ANDROID_RESERVED_MEMORY_ACCOUNT
+    task_free_register(&task_nb);
     viv_gpu_resmem_handler.data = device->kernels[gcvCORE_MAJOR];
     register_reserved_memory_account(&viv_gpu_resmem_handler);
 #endif
@@ -904,6 +943,7 @@ static void drv_exit(void)
     gcmkHEADER();
 
 #ifdef CONFIG_ANDROID_RESERVED_MEMORY_ACCOUNT
+    task_free_unregister(&task_nb);
     unregister_reserved_memory_account(&viv_gpu_resmem_handler);
 #endif
 
@@ -949,12 +989,44 @@ static void drv_exit(void)
 #   define DEVICE_NAME "galcore"
 #endif
 
+#if gcdENABLE_FSCALE_VAL_ADJUST
+static int thermal_hot_pm_notify(struct notifier_block *nb, unsigned long event,
+	void *dummy)
+{
+    static gctUINT orgFscale, minFscale, maxFscale;
+    static gctBOOL bAlreadyTooHot = gcvFALSE;
+    gckHARDWARE hardware = galDevice->kernels[gcvCORE_MAJOR]->hardware;
+
+    if (event && !bAlreadyTooHot) {
+        gckHARDWARE_GetFscaleValue(hardware,&orgFscale,&minFscale, &maxFscale);
+        gckHARDWARE_SetFscaleValue(hardware, minFscale);
+        bAlreadyTooHot = gcvTRUE;
+        gckOS_Print("System is too hot. GPU3D will work at %d/64 clock.\n", minFscale);
+    } else if (!event && bAlreadyTooHot) {
+        gckHARDWARE_SetFscaleValue(hardware, orgFscale);
+        gckOS_Print("Hot alarm is canceled. GPU3D clock will return to %d/64\n", orgFscale);
+        bAlreadyTooHot = gcvFALSE;
+    }
+    return NOTIFY_OK;
+}
+
+static struct notifier_block thermal_hot_pm_notifier = {
+    .notifier_call = thermal_hot_pm_notify,
+    };
+#endif
+
+
+
 static int __devinit gpu_probe(struct platform_device *pdev)
 {
     int ret = -ENODEV;
     struct resource* res;
-    struct viv_gpu_platform_data *pdata;
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
+	struct device_node *dn =pdev->dev.of_node;
+	const u32 *prop;
+#else
+	struct viv_gpu_platform_data *pdata;
+#endif
     gcmkHEADER();
 
     res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "phys_baseaddr");
@@ -994,22 +1066,36 @@ static int __devinit gpu_probe(struct platform_device *pdev)
         registerMemSizeVG = res->end - res->start + 1;
     }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
+	prop = of_get_property(dn, "contiguousbase", NULL);
+	if(prop)
+		contiguousBase = *prop;
+	of_property_read_u32(dn,"contiguoussize", (u32 *)&contiguousSize);
+#else
     pdata = pdev->dev.platform_data;
     if (pdata) {
         contiguousBase = pdata->reserved_mem_base;
         contiguousSize = pdata->reserved_mem_size;
      }
-
-    ret = drv_init();
+#endif
+    if (contiguousSize == 0)
+       gckOS_Print("Warning: No contiguous memory is reserverd for gpu.!\n ");
+    ret = drv_init(&pdev->dev);
 
     if (!ret)
     {
         platform_set_drvdata(pdev, galDevice);
 
+#if gcdENABLE_FSCALE_VAL_ADJUST
+        if(galDevice->kernels[gcvCORE_MAJOR])
+            register_thermal_notifier(&thermal_hot_pm_notifier);
+#endif
         gcmkFOOTER_NO();
         return ret;
     }
-
+#if gcdENABLE_FSCALE_VAL_ADJUST
+    unregister_thermal_notifier(&thermal_hot_pm_notifier);
+#endif
     gcmkFOOTER_ARG(KERN_INFO "Failed to register gpu driver: %d\n", ret);
     return ret;
 }
@@ -1017,6 +1103,10 @@ static int __devinit gpu_probe(struct platform_device *pdev)
 static int __devinit gpu_remove(struct platform_device *pdev)
 {
     gcmkHEADER();
+#if gcdENABLE_FSCALE_VAL_ADJUST
+    if(galDevice->kernels[gcvCORE_MAJOR])
+        unregister_thermal_notifier(&thermal_hot_pm_notifier);
+#endif
     drv_exit();
     gcmkFOOTER_NO();
     return 0;
@@ -1143,6 +1233,32 @@ static int __devinit gpu_resume(struct platform_device *dev)
     return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
+static const struct of_device_id mxs_gpu_dt_ids[] = {
+	{ .compatible = "fsl,imx6q-gpu", },
+	{/* sentinel */}
+};
+MODULE_DEVICE_TABLE(of, mxs_gpu_dt_ids);
+
+#ifdef CONFIG_PM
+int gpu_runtime_suspend(struct device *dev)
+{
+	release_bus_freq(BUS_FREQ_HIGH);
+	return 0;
+}
+
+int gpu_runtime_resume(struct device *dev)
+{
+	request_bus_freq(BUS_FREQ_HIGH);
+	return 0;
+}
+
+static const struct dev_pm_ops gpu_pm_ops = {
+	SET_RUNTIME_PM_OPS(gpu_runtime_suspend, gpu_runtime_resume, NULL)
+};
+#endif
+#endif
+
 static struct platform_driver gpu_driver = {
     .probe      = gpu_probe,
     .remove     = gpu_remove,
@@ -1152,6 +1268,12 @@ static struct platform_driver gpu_driver = {
 
     .driver     = {
         .name   = DEVICE_NAME,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
+		.of_match_table = mxs_gpu_dt_ids,
+#if CONFIG_PM
+		.pm		= &gpu_pm_ops,
+#endif
+#endif
     }
 };
 

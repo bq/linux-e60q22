@@ -18,6 +18,7 @@
 #endif //]LM75_ENABLED
 
 
+//#define OUTPUT_SNAPSHOT_IMGFILE	1
 #define FW_IN_RAM	1
 
 #define WF_INIT	0
@@ -40,12 +41,170 @@ extern int check_hardware_name(void);
 #include "ntx_hwconfig.h"
 extern volatile NTX_HWCONFIG *gptHWCFG;
 
+static int giLastTemprature = DEFAULT_TEMP;
 static int giIsInited = 0;
 DECLARE_COMPLETION(mxc_epdc_fake13522_inited);
+
+static char gcFB_snapshot_pathA[512+2];
+
+
+
 
 //
 // private help functions prototype ...
 //
+
+
+static ssize_t waveform_mode_ver_read(struct device *dev, struct device_attribute *attr,char *buf);
+static ssize_t waveform_mode_ver_write(struct device *dev, struct device_attribute *attr,
+		const char *buf, size_t count);
+
+static ssize_t waveform_rev_read(struct device *dev, struct device_attribute *attr,char *buf);
+static ssize_t waveform_rev_write(struct device *dev, struct device_attribute *attr,
+    const char *buf, size_t count);
+
+
+static ssize_t temperature_read(struct device *dev, struct device_attribute *attr,char *buf);
+static ssize_t temperature_write(struct device *dev, struct device_attribute *attr,
+		       const char *buf, size_t count);
+
+static ssize_t waveform_mode_read(struct device *dev, struct device_attribute *attr,char *buf);
+static ssize_t waveform_mode_write(struct device *dev, struct device_attribute *attr,
+		       const char *buf, size_t count);
+
+static ssize_t fbsnapshot_path_read(struct device *dev, struct device_attribute *attr,char *buf);
+static ssize_t fbsnapshot_path_write(struct device *dev, struct device_attribute *attr,
+		       const char *buf, size_t count);
+
+static DEVICE_ATTR(waveform_mode_ver, 0666, waveform_mode_ver_read, waveform_mode_ver_write);
+static DEVICE_ATTR(waveform_rev, 0666, waveform_rev_read, waveform_rev_write);
+static DEVICE_ATTR(temperature, 0666, temperature_read, temperature_write);
+static DEVICE_ATTR(waveform_mode_gc16, 0666, waveform_mode_read, waveform_mode_write);
+static DEVICE_ATTR(waveform_mode_du, 0666, waveform_mode_read, waveform_mode_write);
+static DEVICE_ATTR(waveform_mode_gl16, 0666, waveform_mode_read, waveform_mode_write);
+static DEVICE_ATTR(waveform_mode_reagl, 0666, waveform_mode_read, waveform_mode_write);
+static DEVICE_ATTR(waveform_mode_reagld, 0666, waveform_mode_read, waveform_mode_write);
+static DEVICE_ATTR(waveform_mode_a2, 0666, waveform_mode_read, waveform_mode_write);
+static DEVICE_ATTR(fbsnapshot_path, 0666, fbsnapshot_path_read, fbsnapshot_path_write);
+
+
+static ssize_t fbsnapshot_path_read(struct device *dev, struct device_attribute *attr,char *buf)
+{
+
+	sprintf (buf,"%s\n",gcFB_snapshot_pathA);
+	return strlen(buf);
+}
+
+static ssize_t fbsnapshot_path_write(struct device *dev, struct device_attribute *attr,
+		       const char *buf, size_t count)
+{
+	strcpy(gcFB_snapshot_pathA,buf);
+	return strlen(buf);
+}
+
+static ssize_t waveform_mode_ver_read(struct device *dev, struct device_attribute *attr,char *buf)
+{
+	sprintf (buf,"0x%x\n",gbModeVersion);
+	return strlen(buf);
+}
+
+static ssize_t waveform_mode_ver_write(struct device *dev, struct device_attribute *attr,
+		       const char *buf, size_t count)
+{
+	DBG_MSG("%s()\n",__FUNCTION__);
+	return count;
+}
+
+static ssize_t waveform_rev_read(struct device *dev, struct device_attribute *attr,char *buf)
+{
+	sprintf (buf,"0x%x\n",gbWFM_REV);
+	return strlen(buf);
+}
+
+static ssize_t waveform_rev_write(struct device *dev, struct device_attribute *attr,
+		       const char *buf, size_t count)
+{
+	DBG_MSG("%s()\n",__FUNCTION__);
+	return count;
+}
+
+static ssize_t temperature_read(struct device *dev, struct device_attribute *attr,char *buf)
+{
+	sprintf (buf,"%d\n",giLastTemprature);
+	return strlen(buf);
+}
+
+static ssize_t temperature_write(struct device *dev, struct device_attribute *attr,
+		       const char *buf, size_t count)
+{
+	giLastTemprature = simple_strtol(buf,NULL,0);
+	DBG_MSG("%s(),temp <== %d\n",__FUNCTION__,giLastTemprature);
+	return count;
+}
+
+static ssize_t waveform_mode_read(struct device *dev, struct device_attribute *attr,char *buf)
+{
+	int iWaveform_mode;
+
+	if(attr==&dev_attr_waveform_mode_du.attr) {
+		//iWaveform_mode = giNTX_waveform_modeA[NTX_WFM_MODE_DU];
+		iWaveform_mode = NTX_WFM_MODE_DU;
+	}
+	else 
+	if(attr==&dev_attr_waveform_mode_a2.attr) {
+		//iWaveform_mode = giNTX_waveform_modeA[NTX_WFM_MODE_A2];
+		iWaveform_mode = NTX_WFM_MODE_A2;
+	}
+	else 
+	if(attr==&dev_attr_waveform_mode_gc16.attr) {
+		//iWaveform_mode = giNTX_waveform_modeA[NTX_WFM_MODE_GC16];
+		iWaveform_mode = NTX_WFM_MODE_GC16;
+	}
+	else 
+	if(attr==&dev_attr_waveform_mode_gl16.attr) {
+		//iWaveform_mode = giNTX_waveform_modeA[NTX_WFM_MODE_GL16];
+		iWaveform_mode = NTX_WFM_MODE_GL16;
+	}
+	else 
+	if(attr==&dev_attr_waveform_mode_reagl.attr) {
+		//iWaveform_mode = giNTX_waveform_modeA[NTX_WFM_MODE_GLR16];
+		iWaveform_mode = NTX_WFM_MODE_GLR16;
+	}
+	else 
+	if(attr==&dev_attr_waveform_mode_reagld.attr) {
+		//iWaveform_mode = giNTX_waveform_modeA[NTX_WFM_MODE_GLD16];
+		iWaveform_mode = NTX_WFM_MODE_GLD16;
+	}
+	else {
+		iWaveform_mode = NTX_WFM_MODE_GC16;
+	}
+
+	sprintf (buf,"%d\n",iWaveform_mode);
+	return strlen(buf);
+}
+
+static ssize_t waveform_mode_write(struct device *dev, struct device_attribute *attr,
+		       const char *buf, size_t count)
+{
+	DBG_MSG("%s() not supported!\n",__FUNCTION__);
+	return count;
+}
+
+static const struct attribute *sysfs_epdc_attrs[] = {
+	&dev_attr_waveform_mode_ver.attr,
+	&dev_attr_waveform_rev.attr,
+	&dev_attr_temperature.attr,
+	&dev_attr_waveform_mode_du.attr,
+	&dev_attr_waveform_mode_a2.attr,
+	&dev_attr_waveform_mode_gc16.attr,
+	&dev_attr_waveform_mode_gl16.attr,
+	&dev_attr_waveform_mode_reagl.attr,
+	&dev_attr_waveform_mode_reagld.attr,
+#ifdef OUTPUT_SNAPSHOT_IMGFILE//[
+	&dev_attr_fbsnapshot_path.attr,
+#endif //]OUTPUT_SNAPSHOT_IMGFILE	
+	NULL,
+};
 
 
 //////////////////////////////////////////////////////
@@ -142,13 +301,15 @@ static int k_fake_s1d13522_wait_inited(void)
 {
 	int iRet=0;
 
-	if(0==giIsInited) {
+	if(giIsInited<=1) 
+	{
 		if(in_interrupt()) {
 			printk("[%s]:skip before init (interrupt).",__FUNCTION__);
 		}
 		else {
 			printk("[%s]:wait init .",__FUNCTION__);
 			wait_for_completion(&mxc_epdc_fake13522_inited);
+			printk("[%s]:wait init ok.",__FUNCTION__);
 		}
 	}
 	return iRet;
@@ -343,7 +504,7 @@ static int k_set_temperature(struct fb_info *info)
 	int iRet;
 	int iChk;
 	
-	static int giLastTemprature = DEFAULT_TEMP;
+	
 	
 
 	//printk("%s(),timeout_tick=%u,current_tick=%u\n",__FUNCTION__,
@@ -351,6 +512,7 @@ static int k_set_temperature(struct fb_info *info)
 	
 	if(0==gdwLastUpdateJiffies||time_after(jiffies,gdwLastUpdateJiffies)) {
 		
+		gdwLastUpdateJiffies = jiffies+(60*HZ);
 
 #ifdef LM75_ENABLED//[
 		if(gptHWCFG&&(6==gptHWCFG->m_val.bDisplayCtrl||7==gptHWCFG->m_val.bDisplayCtrl)) {
@@ -369,8 +531,9 @@ static int k_set_temperature(struct fb_info *info)
 		if(iChk>=0) {
 			//printk("%s():mxc_epdc_fb_set_temperature...\n",__FUNCTION__);// DBG
 			iChk = mxc_epdc_fb_set_temperature(giLastTemprature,info);
-			//printk("%s():mxc_epdc_fb_set_temperature...end\n",__FUNCTION__);// DBG
-			gdwLastUpdateJiffies = jiffies+(60*HZ);
+		}
+		else {
+			gdwLastUpdateJiffies = jiffies;
 		}
 	}
 	return giLastTemprature;
@@ -435,8 +598,22 @@ static int k_get_vcom(int *O_piVCOM_get_mV)
 	return iRet;
 }
 
+static void k_create_sys_attr(void)
+{
+	int err;
+	DBG_MSG("%s()\n",__FUNCTION__);
+	ASSERT(g_fb_data);
+	ASSERT(g_fb_data->dev);
+	//ASSERT(g_fb_data->dev->kobj);
+	err = sysfs_create_files(&g_fb_data->info.dev->kobj, sysfs_epdc_attrs);
+	if (err) {
+		pr_err("Can't create epdc attr sysfs !\n");
+	}
+}
+
 static int k_fake_s1d13522_init(unsigned char *pbInitDCbuf)
 {
+
 	int iChk;
 
 	gptDC = fake_s1d13522_initEx3(default_bpp,g_fb_data->info.screen_base,\
@@ -529,6 +706,7 @@ static int k_fake_s1d13522_init(unsigned char *pbInitDCbuf)
 		}
 #endif //]LM75_ENABLED//
 
+
 		//printk("draw mode0\n");
 		epdc_powerup(g_fb_data);
 		draw_mode0(g_fb_data);
@@ -540,8 +718,7 @@ static int k_fake_s1d13522_init(unsigned char *pbInitDCbuf)
 		
 		//epdc_powerdown(g_fb_data);
 
-		giIsInited = 1;
-		complete_all(&mxc_epdc_fake13522_inited);
+		giIsInited=1;
 		
 		//while(k_is_updating()) {
 			//DBG0_MSG("%s(%d):wait for update done .\n");
@@ -585,12 +762,18 @@ static int k_fake_s1d13522_init(unsigned char *pbInitDCbuf)
 			
 			if( gdwLOGO_size>=((ilogo_width*ilogo_height)>>1) ) {
 				u32 old_upd_scheme=g_fb_data->upd_scheme;
+				u32 old_auto_mode=g_fb_data->auto_mode;
+
 
 				DBG_MSG("drawing logo begin ...\n");
+				mxc_epdc_fb_set_auto_update(AUTO_UPDATE_MODE_REGION_MODE,&g_fb_data->info);
 				mxc_epdc_fb_set_upd_scheme(UPDATE_SCHEME_SNAPSHOT,&g_fb_data->info);
-				fake_s1d13522_display_img(0,0,ilogo_width,ilogo_height,
-					pbInitDCbuf,gptDC,4,0);
+
+				fake_s1d13522_display_img(0,0,ilogo_width,ilogo_height,pbInitDCbuf,gptDC,4,0);
+				k_wait_update_complete();
+
 				mxc_epdc_fb_set_upd_scheme(old_upd_scheme,&g_fb_data->info);
+				mxc_epdc_fb_set_auto_update(old_auto_mode,&g_fb_data->info);
 				DBG_MSG("drawing logo end ...\n");
 			}
 			else {
@@ -601,6 +784,9 @@ static int k_fake_s1d13522_init(unsigned char *pbInitDCbuf)
 			
 		}
 		fake_s1d13522_progress_start(gptDC);
+		giIsInited=2;
+		k_create_sys_attr();
+		complete_all(&mxc_epdc_fake13522_inited);
 			
 		return 0;
 	}

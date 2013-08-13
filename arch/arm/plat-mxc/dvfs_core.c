@@ -395,7 +395,7 @@ static int mx6_set_cpu_freq(int op)
 	if (rate == org_cpu_rate)
 		return ret;
 
-	if (rate > org_cpu_rate) {
+	if ((!IS_ERR(cpu_regulator)) && (rate > org_cpu_rate)) {
 		/* Increase voltage first. */
 		ret = regulator_set_voltage(cpu_regulator, gp_volt,
 					    gp_volt);
@@ -411,7 +411,7 @@ static int mx6_set_cpu_freq(int op)
 		return ret;
 	}
 
-	if (rate < org_cpu_rate) {
+	if ((!IS_ERR(cpu_regulator)) && (rate < org_cpu_rate)) {
 		/* Increase voltage first. */
 		ret = regulator_set_voltage(cpu_regulator, gp_volt,
 					    gp_volt);

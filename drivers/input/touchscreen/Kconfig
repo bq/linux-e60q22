@@ -199,6 +199,16 @@ config TOUCHSCREEN_ELAN
 	  To compile this driver as a module, choose M here: the
 	  module will be called elan-touch.
 
+config TOUCHSCREEN_EGALAX_SINGLE_TOUCH
+	bool "EETI eGalax touchscreen as single-touch"
+	default N
+	depends on TOUCHSCREEN_EGALAX
+	help
+	  If you say yes here you get single-touch touchscreen support
+	  on the eGalax I2C controller.
+	  If you say "no", you'll get the normal multi-touch.
+
+
 config TOUCHSCREEN_FUJITSU
 	tristate "Fujitsu serial touchscreen"
 	select SERIO
@@ -662,6 +672,19 @@ config TOUCHSCREEN_USB_NEXIO
 	bool "NEXIO/iNexio device support" if EXPERT
 	depends on TOUCHSCREEN_USB_COMPOSITE
 
+config TOUCHSCREEN_NOVATEK
+       tristate "NOVATEK touchscreens"
+       depends on I2C
+       help
+         Say Y here if you have a Novatek NT11003 Touchscreen
+	 controller.
+
+	 If unsure, say N.
+
+	 To compile this driver as a module, choose M here: the
+	 module will be called novatek_ts
+
+
 config TOUCHSCREEN_TOUCHIT213
 	tristate "Sahara TouchIT-213 touchscreen"
 	select SERIO
@@ -747,7 +770,6 @@ config TOUCHSCREEN_P1003
 
 	 To compile this driver as a module, choose M here: the
 	 module will be called p1003-ts.
-
 
 config TOUCHSCREEN_TPS6507X
 	tristate "TPS6507x based touchscreens"

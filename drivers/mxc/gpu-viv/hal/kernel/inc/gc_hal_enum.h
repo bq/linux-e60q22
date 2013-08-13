@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2012 by Vivante Corp.
+*    Copyright (C) 2005 - 2013 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -17,8 +17,6 @@
 *    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 *
 *****************************************************************************/
-
-
 
 
 #ifndef __gc_hal_enum_h_
@@ -146,6 +144,12 @@ typedef enum _gceFEATURE
 	gcvFEATURE_PE_DITHER_FIX,
     gcvFEATURE_2D_YUV_SEPARATE_STRIDE,
     gcvFEATURE_FRUSTUM_CLIP_FIX,
+    gcvFEATURE_TEXTURE_LINEAR,
+    gcvFEATURE_TEXTURE_YUV_ASSEMBLER,
+    gcvFEATURE_DYNAMIC_FREQUENCY_SCALING,
+    gcvFEATURE_BUGFIX15,
+    gcvFEATURE_2D_MIRROR_EXTENSION,
+    gcvFEATURE_ELEMENT_INDEX_UINT,
 }
 gceFEATURE;
 
@@ -209,9 +213,13 @@ typedef enum _gceSURF_TYPE
 #if gcdANDROID_UNALIGNED_LINEAR_COMPOSITION_ADJUST
     gcvSURF_FLIP           = 0x800, /* The Resolve Target the will been flip resolve from RT */
 #endif
+    gcvSURF_TILE_STATUS_DIRTY  = 0x1000, /* Init tile status to all dirty */
 
     gcvSURF_RENDER_TARGET_NO_TILE_STATUS = gcvSURF_RENDER_TARGET
                                          | gcvSURF_NO_TILE_STATUS,
+
+    gcvSURF_RENDER_TARGET_TS_DIRTY = gcvSURF_RENDER_TARGET
+                                         | gcvSURF_TILE_STATUS_DIRTY,
 
     gcvSURF_DEPTH_NO_TILE_STATUS         = gcvSURF_DEPTH
                                          | gcvSURF_NO_TILE_STATUS,
@@ -343,6 +351,16 @@ typedef enum _gceSURF_FORMAT
     gcvSURF_DXT5,
     gcvSURF_CXV8U8,
     gcvSURF_ETC1,
+    gcvSURF_R11_EAC,
+    gcvSURF_SIGNED_R11_EAC,
+    gcvSURF_RG11_EAC,
+    gcvSURF_SIGNED_RG11_EAC,
+    gcvSURF_RGB8_ETC2,
+    gcvSURF_SRGB8_ETC2,
+    gcvSURF_RGB8_PUNCHTHROUGH_ALPHA1_ETC2,
+    gcvSURF_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2,
+    gcvSURF_RGBA8_ETC2_EAC,
+    gcvSURF_SRGB8_ALPHA8_ETC2_EAC,
 
     /* YUV formats. */
     gcvSURF_YUY2                = 500,
@@ -472,6 +490,17 @@ typedef enum _gceSURF_ALIGNMENT
     gcvSURF_SPLIT_SUPER_TILED,
 }
 gceSURF_ALIGNMENT;
+
+
+/* Surface Addressing. */
+typedef enum _gceSURF_ADDRESSING
+{
+    gcvSURF_NO_STRIDE_TILED = 0,
+    gcvSURF_NO_STRIDE_LINEAR,
+    gcvSURF_STRIDE_TILED,
+    gcvSURF_STRIDE_LINEAR
+}
+gceSURF_ADDRESSING;
 
 /* Transparency modes. */
 typedef enum _gce2D_TRANSPARENCY
@@ -645,6 +674,12 @@ typedef enum _gce2D_QUERY
     gcv2D_QUERY_YUV_STRIDE_MAX_ALIGN,
 }
 gce2D_QUERY;
+
+typedef enum _gce2D_STATE
+{
+    gcv2D_STATE_SPECIAL_FILTER_MIRROR_MODE       = 1,
+}
+gce2D_STATE;
 
 #ifndef VIVANTE_NO_3D
 /* Texture functions. */

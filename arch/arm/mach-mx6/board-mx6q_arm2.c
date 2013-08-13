@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2012 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2011-2013 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -163,6 +163,7 @@ static struct clk *sata_clk;
 static int esai_record;
 static int sgtl5000_en;
 static int spdif_en;
+static int gpmi_en;
 static int flexcan_en;
 static int disable_mipi_dsi;
 
@@ -172,7 +173,6 @@ extern char *gp_reg_id;
 extern char *soc_reg_id;
 extern char *pu_reg_id;
 extern int epdc_enabled;
-extern void mx6_cpu_regulator_init(void);
 static int max17135_regulator_init(struct max17135 *max17135);
 
 enum sd_pad_mode {
@@ -335,6 +335,16 @@ static inline void mx6_arm2_init_uart(void)
 static int mx6_arm2_fec_phy_init(struct phy_device *phydev)
 {
 	unsigned short val;
+
+	/* Ar8031 phy SmartEEE feature cause link status generates glitch,
+	 * which cause ethernet link down/up issue, so disable SmartEEE
+	 */
+	phy_write(phydev, 0xd, 0x3);
+	phy_write(phydev, 0xe, 0x805d);
+	phy_write(phydev, 0xd, 0x4003);
+	val = phy_read(phydev, 0xe);
+	val &= ~(0x1 << 8);
+	phy_write(phydev, 0xe, val);
 
 	/* To enable AR8031 ouput a 125MHz clk from CLK_25M */
 	phy_write(phydev, 0xd, 0x7);
@@ -1243,7 +1253,7 @@ static void __init mx6_arm2_init_usb(void)
 	mxc_iomux_set_gpr_register(1, 13, 1, 1);
 
 	mx6_set_otghost_vbus_func(imx6_arm2_usbotg_vbus);
-	mx6_usb_dr_init();
+
 #ifdef CONFIG_USB_EHCI_ARC_HSIC
 	mx6_usb_h2_init();
 	mx6_usb_h3_init();
@@ -1307,11 +1317,22 @@ static int mx6_arm2_sata_init(struct device *dev, void __iomem *addr)
 	tmpdata = clk_get_rate(clk) / 1000;
 	clk_put(clk);
 
+#ifdef CONFIG_SATA_AHCI_PLATFORM
 	ret = sata_init(addr, tmpdata);
 	if (ret == 0)
 		return ret;
+#else
+	usleep_range(1000, 2000);
+	/* AHCI PHY enter into PDDQ mode if the AHCI module is not enabled */
+	tmpdata = readl(addr + PORT_PHY_CTL);
+	writel(tmpdata | PORT_PHY_CTL_PDDQ_LOC, addr + PORT_PHY_CTL);
+	pr_info("No AHCI save PWR: PDDQ %s\n", ((readl(addr + PORT_PHY_CTL)
+					>> 20) & 1) ? "enabled" : "disabled");
+#endif
 
 release_sata_clk:
+	/* disable SATA_PHY PLL */
+	writel((readl(IOMUXC_GPR13) & ~0x2), IOMUXC_GPR13);
 	clk_disable(sata_clk);
 put_sata_clk:
 	clk_put(sata_clk);
@@ -1322,6 +1343,7 @@ put_sata_clk:
 	return ret;
 }
 
+#ifdef CONFIG_SATA_AHCI_PLATFORM
 static void mx6_arm2_sata_exit(struct device *dev)
 {
 	clk_disable(sata_clk);
@@ -1337,6 +1359,7 @@ static struct ahci_platform_data mx6_arm2_sata_data = {
 	.init	= mx6_arm2_sata_init,
 	.exit	= mx6_arm2_sata_exit,
 };
+#endif
 
 static struct imx_asrc_platform_data imx_asrc_data = {
 	.channel_bits	= 4,
@@ -1927,6 +1950,14 @@ static int __init early_enable_spdif(char *p)
 
 early_param("spdif", early_enable_spdif);
 
+static int __init early_enable_gpmi(char *p)
+{
+	gpmi_en = 1;
+	return 0;
+}
+
+early_param("gpmi", early_enable_gpmi);
+
 static int __init early_enable_can(char *p)
 {
 	flexcan_en = 1;
@@ -2149,13 +2180,18 @@ static void __init mx6_arm2_init(void)
 	imx6q_add_sdhci_usdhc_imx(3, &mx6_arm2_sd4_data);
 	imx6q_add_sdhci_usdhc_imx(2, &mx6_arm2_sd3_data);
 	imx_add_viv_gpu(&imx6_gpu_data, &imx6_gpu_pdata);
-	if (cpu_is_mx6q())
+	if (cpu_is_mx6q()) {
+#ifdef CONFIG_SATA_AHCI_PLATFORM
 		imx6q_add_ahci(0, &mx6_arm2_sata_data);
+#else
+		mx6_arm2_sata_init(NULL,
+			(void __iomem *)ioremap(MX6Q_SATA_BASE_ADDR, SZ_4K));
+#endif
+	}
 	imx6q_add_vpu();
 	mx6_arm2_init_usb();
 	mx6_arm2_init_audio();
 	platform_device_register(&arm2_vmmc_reg_devices);
-	mx6_cpu_regulator_init();
 
 	imx_asrc_data.asrc_core_clk = clk_get(NULL, "asrc_clk");
 	imx_asrc_data.asrc_audio_clk = clk_get(NULL, "asrc_serial_clk");
@@ -2179,7 +2215,8 @@ static void __init mx6_arm2_init(void)
 	imx6q_add_viim();
 	imx6q_add_imx2_wdt(0, NULL);
 	imx6q_add_dma();
-	imx6q_add_gpmi(&mx6_gpmi_nand_platform_data);
+	if (gpmi_en)
+		imx6q_add_gpmi(&mx6_gpmi_nand_platform_data);
 
 	imx6q_add_dvfs_core(&arm2_dvfscore_data);
 

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2011-2012 Freescale Semiconductor, Inc. All Rights Reserved.
+ *  Copyright (C) 2011-2013 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -69,19 +69,17 @@
 #define ANATOP_REG_1P1_OFFSET		0x110
 #define ANATOP_REG_2P5_OFFSET		0x130
 #define ANATOP_REG_CORE_OFFSET		0x140
+#define VDD3P0_VOLTAGE                   3200000
 
 static struct clk *cpu_clk;
 static struct clk *axi_clk;
 static struct clk *periph_clk;
 static struct clk *pll3_usb_otg_main_clk;
+static struct regulator *vdd3p0_regulator;
 
 static struct pm_platform_data *pm_data;
 
 
-#ifdef CONFIG_MX6_INTER_LDO_BYPASS
-void mxc_cpufreq_suspend(void);
-void mxc_cpufreq_resume(void);
-#endif
 #if defined(CONFIG_CPU_FREQ)
 extern int set_cpu_freq(int wp);
 #endif
@@ -317,9 +315,13 @@ static int mx6_suspend_enter(suspend_state_t state)
 	}
 	mx6_suspend_store();
 
-	/* i.MX6dl TO1.0 TKT094231: can't support ARM_POWER_OFF mode */
+	/*
+	 * i.MX6dl TO1.0/i.MX6dq TO1.1/1.0 TKT094231: can't support
+	 * ARM_POWER_OFF mode.
+	 */
 	if (state == PM_SUSPEND_MEM &&
-		(mx6dl_revision() == IMX_CHIP_REVISION_1_0)) {
+		((mx6dl_revision() == IMX_CHIP_REVISION_1_0) ||
+		(cpu_is_mx6q() && mx6q_revision() <= IMX_CHIP_REVISION_1_1))) {
 		state = PM_SUSPEND_STANDBY;
 	}
 	
@@ -347,8 +349,6 @@ static int mx6_suspend_enter(suspend_state_t state)
 	}
 
 	if (state == PM_SUSPEND_MEM || state == PM_SUSPEND_STANDBY) {
-		if (pm_data && pm_data->suspend_enter)
-			pm_data->suspend_enter();
 
 		local_flush_tlb_all();
 		flush_cache_all();
@@ -359,8 +359,14 @@ static int mx6_suspend_enter(suspend_state_t state)
 			save_gic_cpu_state(0, &gcs);
 		}
 
+		if (pm_data && pm_data->suspend_enter)
+			pm_data->suspend_enter();
+
 		suspend_in_iram(state, (unsigned long)iram_paddr,
 			(unsigned long)suspend_iram_base, cpu_type);
+
+		if (pm_data && pm_data->suspend_exit)
+			pm_data->suspend_exit();
 
 		/* Reset the RBC counter. */
 		/* All interrupts should be masked before the
@@ -401,8 +407,6 @@ static int mx6_suspend_enter(suspend_state_t state)
 		__raw_writel(BM_ANADIG_ANA_MISC0_STOP_MODE_CONFIG,
 			anatop_base + HW_ANADIG_ANA_MISC0_CLR);
 
-		if (pm_data && pm_data->suspend_exit)
-			pm_data->suspend_exit();
 	} else {
 			cpu_do_idle();
 	}
@@ -416,7 +420,12 @@ static int mx6_suspend_enter(suspend_state_t state)
  */
 static int mx6_suspend_prepare(void)
 {
-
+	int ret;
+	ret = regulator_disable(vdd3p0_regulator);
+	if (ret) {
+		printk(KERN_ERR "%s: failed to disable 3p0 regulator Err: %d\n",
+							__func__, ret);
+	}
 	return 0;
 }
 
@@ -425,25 +434,22 @@ static int mx6_suspend_prepare(void)
  */
 static void mx6_suspend_finish(void)
 {
+	int ret;
+	ret = regulator_enable(vdd3p0_regulator);
+	if (ret) {
+		printk(KERN_ERR "%s: failed to enable 3p0 regulator Err: %d\n",
+						__func__, ret);
+	}
 }
 
-#ifdef CONFIG_MX6_INTER_LDO_BYPASS
 static int mx6_suspend_begin(suspend_state_t state)
 {
-	mxc_cpufreq_suspend();
 	return 0;
 }
-#endif
 
 /*
  * Called after devices are re-setup, but before processes are thawed.
  */
-static void mx6_suspend_end(void)
-{
-#ifdef CONFIG_MX6_INTER_LDO_BYPASS
-	mxc_cpufreq_resume();
-#endif
-}
 
 static int mx6_pm_valid(suspend_state_t state)
 {
@@ -452,13 +458,10 @@ static int mx6_pm_valid(suspend_state_t state)
 
 struct platform_suspend_ops mx6_suspend_ops = {
 	.valid = mx6_pm_valid,
-#ifdef CONFIG_MX6_INTER_LDO_BYPASS
 	.begin = mx6_suspend_begin,
-#endif
 	.prepare = mx6_suspend_prepare,
 	.enter = mx6_suspend_enter,
 	.finish = mx6_suspend_finish,
-	.end = mx6_suspend_end,
 };
 
 static int __devinit mx6_pm_probe(struct platform_device *pdev)
@@ -478,6 +481,7 @@ static struct platform_driver mx6_pm_driver = {
 
 static int __init pm_init(void)
 {
+	int ret = 0;
 	scu_base = IO_ADDRESS(SCU_BASE_ADDR);
 	gpc_base = IO_ADDRESS(GPC_BASE_ADDR);
 	src_base = IO_ADDRESS(SRC_BASE_ADDR);
@@ -535,6 +539,24 @@ static int __init pm_init(void)
 		return PTR_ERR(pll3_usb_otg_main_clk);
 	}
 
+	vdd3p0_regulator = regulator_get(NULL, "cpu_vdd3p0");
+	if (IS_ERR(vdd3p0_regulator)) {
+		printk(KERN_ERR "%s: failed to get 3p0 regulator Err: %d\n",
+						__func__, ret);
+		return PTR_ERR(vdd3p0_regulator);
+	}
+	ret = regulator_set_voltage(vdd3p0_regulator, VDD3P0_VOLTAGE,
+							VDD3P0_VOLTAGE);
+	if (ret) {
+		printk(KERN_ERR "%s: failed to set 3p0 regulator voltage Err: %d\n",
+						__func__, ret);
+	}
+	ret = regulator_enable(vdd3p0_regulator);
+	if (ret) {
+		printk(KERN_ERR "%s: failed to enable 3p0 regulator Err: %d\n",
+						__func__, ret);
+	}
+
 	printk(KERN_INFO "PM driver module loaded\n");
 
 	return 0;
@@ -544,6 +566,7 @@ static void __exit pm_cleanup(void)
 {
 	/* Unregister the device structure */
 	platform_driver_unregister(&mx6_pm_driver);
+	regulator_put(vdd3p0_regulator);
 }
 
 module_init(pm_init);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2012-2013 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -203,8 +203,7 @@ static struct clk *clko;
 static int mma8451_position = 1;
 static int mag3110_position = 2;
 static int max11801_mode = 1;
-static int enable_lcd_ldb;
-
+static int caam_enabled;
 
 extern char *gp_reg_id;
 extern char *soc_reg_id;
@@ -253,6 +252,16 @@ static inline void mx6q_sabresd_init_uart(void)
 static int mx6q_sabresd_fec_phy_init(struct phy_device *phydev)
 {
 	unsigned short val;
+
+	/* Ar8031 phy SmartEEE feature cause link status generates glitch,
+	 * which cause ethernet link down/up issue, so disable SmartEEE
+	 */
+	phy_write(phydev, 0xd, 0x3);
+	phy_write(phydev, 0xe, 0x805d);
+	phy_write(phydev, 0xd, 0x4003);
+	val = phy_read(phydev, 0xe);
+	val &= ~(0x1 << 8);
+	phy_write(phydev, 0xe, val);
 
 	/* To enable AR8031 ouput a 125MHz clk from CLK_25M */
 	phy_write(phydev, 0xd, 0x7);
@@ -782,7 +791,7 @@ static struct i2c_board_info mxc_i2c0_board_info[] __initdata = {
 		I2C_BOARD_INFO("wm89**", 0x1a),
 	},
 	{
-		I2C_BOARD_INFO("ov5642", 0x3c),
+		I2C_BOARD_INFO("ov564x", 0x3c),
 		.platform_data = (void *)&camera_data,
 	},
 	{
@@ -1084,6 +1093,14 @@ static void imx6q_sabresd_usbotg_vbus(bool on)
 		gpio_set_value(SABRESD_USB_OTG_PWR, 0);
 }
 
+static void imx6q_sabresd_host1_vbus(bool on)
+{
+	if (on)
+		gpio_set_value(SABRESD_USB_H1_PWR, 1);
+	else
+		gpio_set_value(SABRESD_USB_H1_PWR, 0);
+}
+
 static void __init imx6q_sabresd_init_usb(void)
 {
 	int ret = 0;
@@ -1106,14 +1123,15 @@ static void __init imx6q_sabresd_init_usb(void)
 			ret);
 		return;
 	}
-	gpio_direction_output(SABRESD_USB_H1_PWR, 1);
+	gpio_direction_output(SABRESD_USB_H1_PWR, 0);
 	if (board_is_mx6_reva())
 		mxc_iomux_set_gpr_register(1, 13, 1, 1);
 	else
 		mxc_iomux_set_gpr_register(1, 13, 1, 0);
 
 	mx6_set_otghost_vbus_func(imx6q_sabresd_usbotg_vbus);
-	mx6_usb_dr_init();
+	mx6_set_host1_vbus_func(imx6q_sabresd_host1_vbus);
+
 }
 
 /* HW Initialization, if return 0, initialization is successful. */
@@ -1165,11 +1183,22 @@ static int mx6q_sabresd_sata_init(struct device *dev, void __iomem *addr)
 	tmpdata = clk_get_rate(clk) / 1000;
 	clk_put(clk);
 
+#ifdef CONFIG_SATA_AHCI_PLATFORM
 	ret = sata_init(addr, tmpdata);
 	if (ret == 0)
 		return ret;
+#else
+	usleep_range(1000, 2000);
+	/* AHCI PHY enter into PDDQ mode if the AHCI module is not enabled */
+	tmpdata = readl(addr + PORT_PHY_CTL);
+	writel(tmpdata | PORT_PHY_CTL_PDDQ_LOC, addr + PORT_PHY_CTL);
+	pr_info("No AHCI save PWR: PDDQ %s\n", ((readl(addr + PORT_PHY_CTL)
+					>> 20) & 1) ? "enabled" : "disabled");
+#endif
 
 release_sata_clk:
+	/* disable SATA_PHY PLL */
+	writel((readl(IOMUXC_GPR13) & ~0x2), IOMUXC_GPR13);
 	clk_disable(sata_clk);
 put_sata_clk:
 	clk_put(sata_clk);
@@ -1177,6 +1206,7 @@ put_sata_clk:
 	return ret;
 }
 
+#ifdef CONFIG_SATA_AHCI_PLATFORM
 static void mx6q_sabresd_sata_exit(struct device *dev)
 {
 	clk_disable(sata_clk);
@@ -1187,6 +1217,7 @@ static struct ahci_platform_data mx6q_sabresd_sata_data = {
 	.init = mx6q_sabresd_sata_init,
 	.exit = mx6q_sabresd_sata_exit,
 };
+#endif
 
 static void mx6q_sabresd_flexcan0_switch(int enable)
 {
@@ -1332,11 +1363,11 @@ static struct fsl_mxc_lcd_platform_data lcdif_data = {
 
 static struct fsl_mxc_ldb_platform_data ldb_data = {
 	.ipu_id = 1,
-	.disp_id = 0,
+	.disp_id = 1,
 	.ext_ref = 1,
-	.mode = LDB_SEP0,
+	.mode = LDB_SEP1,
 	.sec_ipu_id = 1,
-	.sec_disp_id = 1,
+	.sec_disp_id = 0,
 };
 
 static struct max8903_pdata charger1_data = {
@@ -1586,14 +1617,8 @@ static struct platform_pwm_backlight_data mx6_sabresd_pwm_backlight_data = {
 };
 
 static struct mxc_dvfs_platform_data sabresd_dvfscore_data = {
-#ifdef CONFIG_MX6_INTER_LDO_BYPASS
 	.reg_id = "VDDCORE",
 	.soc_id	= "VDDSOC",
-#else
-	.reg_id = "cpu_vddgp",
-	.soc_id = "cpu_vddsoc",
-	.pu_id = "cpu_vddvpu",
-#endif
 	.clk1_id = "cpu_clk",
 	.clk2_id = "gpc_dvfs_clk",
 	.gpc_cntr_offset = MXC_GPC_CNTR_OFFSET,
@@ -1629,6 +1654,13 @@ static struct mipi_csi2_platform_data mipi_csi2_pdata = {
 	.pixel_clk = "emi_clk",
 };
 
+static int __init caam_setup(char *__unused)
+{
+	caam_enabled = 1;
+	return 1;
+}
+early_param("caam", caam_setup);
+
 #define SNVS_LPCR 0x38
 static void mx6_snvs_poweroff(void)
 {
@@ -1646,13 +1678,6 @@ static const struct imx_pcie_platform_data mx6_sabresd_pcie_data __initconst = {
 	.pcie_wake_up	= SABRESD_PCIE_WAKE_B,
 	.pcie_dis	= SABRESD_PCIE_DIS_B,
 };
-
-static int __init early_enable_lcd_ldb(char *p)
-{
-	enable_lcd_ldb = 1;
-	return 0;
-}
-early_param("enable_lcd_ldb", early_enable_lcd_ldb);
 
 /*!
  * Board specific initialization.
@@ -1684,7 +1709,6 @@ static void __init mx6_sabresd_board_init(void)
 
 	gp_reg_id = sabresd_dvfscore_data.reg_id;
 	soc_reg_id = sabresd_dvfscore_data.soc_id;
-	pu_reg_id = sabresd_dvfscore_data.pu_id;
 	mx6q_sabresd_init_uart();
 
 	/*
@@ -1696,16 +1720,7 @@ static void __init mx6_sabresd_board_init(void)
 	 */
 	if (cpu_is_mx6dl()) {
 		ldb_data.ipu_id = 0;
-		ldb_data.disp_id = 0;
 		ldb_data.sec_ipu_id = 0;
-		ldb_data.sec_disp_id = 1;
-		hdmi_core_data.disp_id = 1;
-		mipi_dsi_pdata.ipu_id = 0;
-		mipi_dsi_pdata.disp_id = 1;
-		if (enable_lcd_ldb) {
-			ldb_data.disp_id = 1;
-			ldb_data.mode = LDB_SIN1;
-		}
 	}
 	imx6q_add_mxc_hdmi_core(&hdmi_core_data);
 
@@ -1728,7 +1743,8 @@ static void __init mx6_sabresd_board_init(void)
 	imx6q_add_mipi_csi2(&mipi_csi2_pdata);
 	imx6q_add_imx_snvs_rtc();
 
-	imx6q_add_imx_caam();
+	if (1 == caam_enabled)
+		imx6q_add_imx_caam();
 
 	if (board_is_mx6_reva()) {
 		strcpy(mxc_i2c0_board_info[0].type, "wm8958");
@@ -1775,8 +1791,14 @@ static void __init mx6_sabresd_board_init(void)
 	imx_add_viv_gpu(&imx6_gpu_data, &imx6q_gpu_pdata);
 	imx6q_sabresd_init_usb();
 	/* SATA is not supported by MX6DL/Solo */
-	if (cpu_is_mx6q())
+	if (cpu_is_mx6q()) {
+#ifdef CONFIG_SATA_AHCI_PLATFORM
 		imx6q_add_ahci(0, &mx6q_sabresd_sata_data);
+#else
+		mx6q_sabresd_sata_init(NULL,
+			(void __iomem *)ioremap(MX6Q_SATA_BASE_ADDR, SZ_4K));
+#endif
+	}
 	imx6q_add_vpu();
 	imx6q_init_audio();
 	platform_device_register(&sabresd_vmmc_reg_devices);
@@ -1807,9 +1829,6 @@ static void __init mx6_sabresd_board_init(void)
 	imx6q_add_dma();
 
 	imx6q_add_dvfs_core(&sabresd_dvfscore_data);
-#ifndef CONFIG_MX6_INTER_LDO_BYPASS
-	mx6_cpu_regulator_init();
-#endif
 	imx6q_add_device_buttons();
 
 	/* enable sensor 3v3 and 1v8 */

@@ -29,8 +29,6 @@
 #define _QT_SUPPORT				1
 
 
-//#define OUTPUT_IMGFILE_ENABLE		1
-#define OUTPUT_IMGFILE "/dev/shm/epdtemp"
 
 
 #define BusIssueReadReg(wRegIdx) S1D13522_reg_read(wRegIdx)
@@ -662,8 +660,10 @@ int fake_s1d13522_display_img(u16 wX,u16 wY,u16 wW,u16 wH,u8 *pbImgBuf,
 	
 	ASSERT(pDC);
 	
-	DBG_MSG("%s() : x=%d,y=%d,w=%d,h=%d,r=%d,bit=%d,p=%p,dc.w=%d,dc.h=%d,dc.fb.w+=%d,dc.fb.h+=%d\n",__FUNCTION__,\
-		wX,wY,wW,wH,I_tRotate,iPixelBits,pbImgBuf,pDC->dwWidth,pDC->dwHeight,pDC->dwFBWExtra,pDC->dwFBHExtra);
+	DBG_MSG("%s() : x=%d,y=%d,w=%d,h=%d,r=%d,bit=%d,p=%p,dc.w=%d,dc.h=%d,dc.fb.w+=%d,dc.fb.h+=%d,dc.wfmode=%d\n",__FUNCTION__,\
+		wX,wY,wW,wH,I_tRotate,iPixelBits,pbImgBuf,
+		pDC->dwWidth,pDC->dwHeight,pDC->dwFBWExtra,
+		pDC->dwFBHExtra,pDC->iWFMode);
 	
 	uiCnt = 0 ;
 
@@ -820,35 +820,6 @@ int fake_s1d13522_display_img(u16 wX,u16 wY,u16 wW,u16 wH,u8 *pbImgBuf,
 	}
 	}
 	
-#ifdef OUTPUT_IMGFILE_ENABLE//[
-
-	{
-		EPDFB_DC *ptDC_temp;
-		char cfnbufA[256];
-		int iBits=8;
-		unsigned long _w=pDC->dwWidth,_h=pDC->dwHeight;
-
-
-		ptDC_temp = epdfbdc_create_ex ( _w,_h,iBits,0,pDC->dwFlags);
-		epdfbdc_put_dcimg(ptDC_temp,pDC,0,0,0,_w,_h,0,0);
-		sprintf(cfnbufA,"%s_%ux%u.raw%d",OUTPUT_IMGFILE,_w,_h,iBits);
-
-		printk("write raw img -> \"%s\" ,%d bits,%u bytes,w=%u,h=%u\n",cfnbufA,iBits,ptDC_temp->dwDCSize,_w,_h);
-		write_file_ex(cfnbufA,ptDC_temp->pbDCbuf, ptDC_temp->dwDCSize) ;
-	
-		if(8==iBits) {
-			printk("printf \"P5\\n%u\\n%u\\n255\\n\"> xxx.pgm \n",pDC->dwWidth,pDC->dwHeight);
-			printk("cat \"%s\">> xxx.pgm \n",cfnBufA);
-		}
-		else (16=iBits) {
-			printk("rawtoppm %u %u %s > xxx.ppm \n",pDC->dwWidth,pDC->dwHeight,cfnbufA);
-		}
-
-		epdfbdc_delete(ptDC_temp);
-	}
-#endif //]OUTPUT_IMGFILE_ENABLE
-		
-	
 	
 	if(pDC->pfnDispStart) {
 		pDC->pfnDispStart(1);
@@ -882,8 +853,12 @@ int _Epson_displayCMD(PST_IMAGE_PGM pt,EPDFB_DC *pDC)
 	ASSERT(pDC->pfnGetWaveformBpp);
 	iCurWfBpp = pDC->pfnGetWaveformBpp();
 	
-	
 //					setWaveform(par,pt->WaveForm+1);
+	if(257==pt->WaveForm) {
+		// WAVEFORM_MODE_AUTO
+		newMode = pt->WaveForm;
+	}
+	else
 	if (pt->Width*pt->Height == pDC->dwWidth*pDC->dwHeight) {
 		GALLEN_DBGLOCAL_RUNLOG(2);
 		ASSERT(pDC->pfnGetWaveformBpp);
@@ -2880,6 +2855,69 @@ int32_t fake_s1d13522_ioctl(unsigned int cmd,unsigned long arg,EPDFB_DC *pDC)
 
 	GALLEN_DBGLOCAL_END();
 	return ret;
+}
+
+void fb_capture(EPDFB_DC *pDC,int iBitsTo,EPDFB_ROTATE_T I_tRotateDegree,char *pszFileName)
+{
+	EPDFB_DC *ptDC_Capture;
+	char cfnbufA[256];
+	unsigned long _FBw,_FBh;
+	unsigned long _w,_h;
+	static unsigned long gdwCaptureCnt=0;
+	const unsigned long dwCaptureTotals=1;
+	int iCaptureIDX;
+
+
+	ASSERT(pDC);
+
+	if(0==pszFileName) {
+		return ;
+	}
+
+	if('\0'==pszFileName[0]) {
+		return ;
+	}
+
+	switch(I_tRotateDegree)	
+	{
+	default:
+	case EPDFB_R_0:
+	case EPDFB_R_180:
+		_w = pDC->dwWidth;
+		_h = pDC->dwHeight;
+		_FBw = _w + pDC->dwFBWExtra;
+		_FBh = _h + pDC->dwFBHExtra;
+		break;
+	case EPDFB_R_90:
+	case EPDFB_R_270:
+		_h = pDC->dwWidth;
+		_w = pDC->dwHeight;
+		_FBh = _w + pDC->dwFBWExtra;
+		_FBw = _h + pDC->dwFBHExtra;
+		break;
+	}
+	iCaptureIDX = gdwCaptureCnt++%dwCaptureTotals;
+	ptDC_Capture = epdfbdc_create_ex2 ( _w,_h,_w,_h,iBitsTo,0,pDC->dwFlags);
+	epdfbdc_put_dcimg(ptDC_Capture,pDC,I_tRotateDegree,0,0,pDC->dwWidth,pDC->dwHeight,0,0);
+	sprintf(cfnbufA,"%s_%ux%u-%d.raw%d",pszFileName,_w,_h,iCaptureIDX,iBitsTo);
+
+	printk("write raw img -> \"%s\" ,%d bits,%u bytes,w=%u,h=%u\n",
+			cfnbufA,iBitsTo,ptDC_Capture->dwDCSize,_w,_h);
+	write_file_ex(cfnbufA,ptDC_Capture->pbDCbuf, ptDC_Capture->dwDCSize) ;
+
+	if(8==iBitsTo) {
+		printk("printf \"P5\\n%u\\n%u\\n255\\n\"> %s.pgm \n",_w,_h,cfnbufA);
+		printk("cat \"%s\">> %s.pgm \n",cfnbufA,cfnbufA);
+	}
+
+	else if(16 == iBitsTo) {
+		printk("rawtoppm %u %u %s > %s.ppm \n",_w,_h,cfnbufA,cfnbufA);
+	}
+	else {
+	}
+
+	epdfbdc_delete(ptDC_Capture);
+
 }
 
 #ifdef SHOW_PROGRESS_BAR //[

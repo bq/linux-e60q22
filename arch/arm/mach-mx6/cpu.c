@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2012 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2011-2013 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@
 #include <linux/delay.h>
 
 #include <mach/hardware.h>
+#include <mach/system.h>
 #include <asm/io.h>
 #include <asm/mach/map.h>
 
@@ -33,7 +34,8 @@
 
 struct cpu_op *(*get_cpu_op)(int *op);
 bool enable_wait_mode = true;
-u32 arm_max_freq = CPU_AT_1GHz;
+u32 enable_ldo_mode = LDO_MODE_DEFAULT;
+u32 arm_max_freq = CPU_AT_1_2GHz;
 bool mem_clk_on_in_wait;
 int chip_rev;
 
@@ -211,6 +213,13 @@ static int __init post_cpu_init(void)
 	else
 		chip_rev = mx6sl_revision();
 
+	/* mx6sl doesn't have pcie. save power, disable PCIe PHY */
+	if (!cpu_is_mx6sl()) {
+		reg = __raw_readl(IOMUXC_GPR1);
+		reg = reg & (~IOMUXC_GPR1_PCIE_REF_CLK_EN);
+		reg |= IOMUXC_GPR1_TEST_POWERDOWN;
+		__raw_writel(reg, IOMUXC_GPR1);
+	}
 	return 0;
 }
 postcore_initcall(post_cpu_init);
@@ -244,6 +253,19 @@ static int __init arm_core_max(char *p)
 }
 
 early_param("arm_freq", arm_core_max);
+
+static int __init enable_ldo(char *p)
+{
+	if (memcmp(p, "on", 2) == 0) {
+		enable_ldo_mode = LDO_MODE_ENABLED;
+		p += 2;
+	} else if (memcmp(p, "off", 3) == 0) {
+		enable_ldo_mode = LDO_MODE_BYPASSED;
+		p += 3;
+	}
+	return 0;
+}
+early_param("ldo_active", enable_ldo);
 
 static int __init enable_mem_clk_in_wait(char *p)
 {

@@ -1,7 +1,7 @@
 /*
  * imx-ssi.c  --  ALSA Soc Audio Layer
  *
- * Copyright 2010-2012 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2010-2013 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * Copyright 2009 Sascha Hauer <s.hauer@pengutronix.de>
  *
@@ -53,14 +53,19 @@
 #include <sound/soc.h>
 
 #include <mach/ssi.h>
+#include <mach/iram.h>
 #include <mach/hardware.h>
 
 #include "imx-ssi.h"
+#include "imx-pcm.h"
 
 #define SSI_SACNT_DEFAULT (SSI_SACNT_AC97EN | SSI_SACNT_FV)
 #define IMX_SSI_FORMATS \
 	(SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S20_3LE | \
 	SNDRV_PCM_FMTBIT_S24_LE)
+#ifdef CONFIG_SND_MXC_SOC_IRAM
+static int UseIRAM;
+#endif
 
 /*
  * SSI Network Mode or TDM slots configuration.
@@ -418,15 +423,61 @@ static struct snd_soc_dai_ops imx_ssi_pcm_dai_ops = {
 	.shutdown	= imx_ssi_shutdown,
 };
 
+#ifdef CONFIG_SND_MXC_SOC_IRAM
+
+static struct vm_operations_struct snd_mxc_audio_playback_vm_ops = {
+	.open = snd_pcm_mmap_data_open,
+	.close = snd_pcm_mmap_data_close,
+};
+
+/*
+	enable user space access to iram buffer
+*/
+static int imx_iram_audio_playback_mmap(struct snd_pcm_substream *substream,
+					struct vm_area_struct *area)
+{
+	struct snd_dma_buffer *buf = &substream->dma_buffer;
+	unsigned long off;
+	unsigned long phys;
+	unsigned long size;
+	int ret = 0;
+
+	area->vm_ops = &snd_mxc_audio_playback_vm_ops;
+	area->vm_private_data = substream;
+
+	off = area->vm_pgoff << PAGE_SHIFT;
+	phys = buf->addr + off;
+	size = area->vm_end - area->vm_start;
+
+	area->vm_page_prot = pgprot_writecombine(area->vm_page_prot);
+	area->vm_flags |= VM_IO;
+	ret =
+	    remap_pfn_range(area, area->vm_start, phys >> PAGE_SHIFT,
+			    size, area->vm_page_prot);
+
+	return ret;
+}
+#endif
+
 int snd_imx_pcm_mmap(struct snd_pcm_substream *substream,
 		struct vm_area_struct *vma)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	int ret;
 
+#ifdef CONFIG_SND_MXC_SOC_IRAM
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+
+	if ((!strncmp(rtd->cpu_dai->name, "imx-ssi", strlen("imx-ssi")))
+			&& (UseIRAM & (1<<substream->stream)))
+		ret = imx_iram_audio_playback_mmap(substream, vma);
+	else
+		ret = dma_mmap_coherent(NULL, vma, runtime->dma_area,
+			runtime->dma_addr, runtime->dma_bytes);
+#else
 	ret = dma_mmap_coherent(NULL, vma, runtime->dma_area,
 			runtime->dma_addr, runtime->dma_bytes);
-
+#endif
 	pr_debug("%s: ret: %d %p 0x%08x 0x%08x\n", __func__, ret,
 			runtime->dma_area,
 			runtime->dma_addr,
@@ -438,17 +489,53 @@ EXPORT_SYMBOL_GPL(snd_imx_pcm_mmap);
 static int imx_pcm_preallocate_dma_buffer(struct snd_pcm *pcm, int stream)
 {
 	struct snd_pcm_substream *substream = pcm->streams[stream].substream;
+	struct snd_soc_pcm_runtime *rtd = pcm->private_data;
 	struct snd_dma_buffer *buf = &substream->dma_buffer;
-	size_t size = IMX_SSI_DMABUF_SIZE;
+	size_t size;
+#ifdef CONFIG_SND_MXC_SOC_IRAM
+	unsigned long buf_paddr;
+#endif
+
+	if (!strncmp(rtd->cpu_dai->name, "imx-ssi", strlen("imx-ssi")))
+		size = IMX_SSI_DMABUF_SIZE;
+	else if (!strncmp(rtd->cpu_dai->name, "imx-esai", strlen("imx-esai")))
+		size = IMX_ESAI_DMABUF_SIZE;
+	else if (!strncmp(rtd->cpu_dai->name, "imx-spdif", strlen("imx-spdif")))
+		size = IMX_SPDIF_DMABUF_SIZE;
+	else
+		size = IMX_DEFAULT_DMABUF_SIZE;
 
 	buf->dev.type = SNDRV_DMA_TYPE_DEV;
 	buf->dev.dev = pcm->card->dev;
 	buf->private_data = NULL;
+	buf->bytes = size;
+
+#ifdef CONFIG_SND_MXC_SOC_IRAM
+	if (!strncmp(rtd->cpu_dai->name, "imx-ssi", strlen("imx-ssi"))) {
+		buf->area = iram_alloc(size, &buf_paddr);
+		if (!buf->area) {
+			buf->area =
+			    dma_alloc_writecombine(pcm->card->dev, size,
+						   &buf->addr, GFP_KERNEL);
+			if (!buf->area)
+				return -ENOMEM;
+		} else {
+			buf->addr = buf_paddr;
+			UseIRAM |= 1<<substream->stream;
+		}
+	} else {
+		buf->area = dma_alloc_writecombine(pcm->card->dev, size,
+						   &buf->addr, GFP_KERNEL);
+		if (!buf->area)
+			return -ENOMEM;
+
+	}
+#else
 	buf->area = dma_alloc_writecombine(pcm->card->dev, size,
 					   &buf->addr, GFP_KERNEL);
 	if (!buf->area)
 		return -ENOMEM;
-	buf->bytes = size;
+#endif
 
 	return 0;
 }
@@ -489,6 +576,9 @@ void imx_pcm_free(struct snd_pcm *pcm)
 	struct snd_pcm_substream *substream;
 	struct snd_dma_buffer *buf;
 	int stream;
+#ifdef CONFIG_SND_MXC_SOC_IRAM
+	struct snd_soc_pcm_runtime *rtd = pcm->private_data;
+#endif
 
 	for (stream = 0; stream < 2; stream++) {
 		substream = pcm->streams[stream].substream;
@@ -499,8 +589,19 @@ void imx_pcm_free(struct snd_pcm *pcm)
 		if (!buf->area)
 			continue;
 
+#ifdef CONFIG_SND_MXC_SOC_IRAM
+		if ((!strncmp(rtd->cpu_dai->name, "imx-ssi", strlen("imx-ssi")))
+			&& (UseIRAM & (1<<substream->stream))) {
+			iram_free(buf->addr, IMX_SSI_DMABUF_SIZE);
+			UseIRAM &= ~(1<<substream->stream);
+		} else {
+			dma_free_writecombine(pcm->card->dev, buf->bytes,
+				      buf->area, buf->addr);
+		}
+#else
 		dma_free_writecombine(pcm->card->dev, buf->bytes,
 				      buf->area, buf->addr);
+#endif
 		buf->area = NULL;
 	}
 }
@@ -743,7 +844,7 @@ static int imx_ssi_probe(struct platform_device *pdev)
 	ssi->dma_params_rx.dma_addr = res->start + SSI_SRX0;
 	ssi->dma_params_tx.dma_addr = res->start + SSI_STX0;
 
-	ssi->dma_params_tx.burstsize = 4;
+	ssi->dma_params_tx.burstsize = 6;
 	ssi->dma_params_rx.burstsize = 4;
 
 	ssi->dma_params_tx.peripheral_type = IMX_DMATYPE_SSI_SP;

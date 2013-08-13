@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2011-2013 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,6 +40,7 @@ struct platform_device *__init imx_add_mlb(
 #endif /* ifdef CONFIG_SOC_IMX53 */
 
 #ifdef CONFIG_SOC_IMX6Q
+
 struct platform_device *__init imx_add_mlb(
 		const struct mxc_mlb_platform_data *pdata)
 {
@@ -65,6 +66,10 @@ struct platform_device *__init imx_add_mlb(
 			.flags = IORESOURCE_IRQ,
 		},
 	};
+
+	if (!fuse_dev_is_available(MXC_DEV_MLB))
+		return ERR_PTR(-ENODEV);
+
 	return imx_add_platform_device("mxc_mlb150", 0,
 			res, ARRAY_SIZE(res), pdata, sizeof(*pdata));
 }

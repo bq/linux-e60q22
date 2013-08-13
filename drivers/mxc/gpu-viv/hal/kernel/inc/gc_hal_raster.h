@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2012 by Vivante Corp.
+*    Copyright (C) 2005 - 2013 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -17,8 +17,6 @@
 *    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 *
 *****************************************************************************/
-
-
 
 
 #ifndef __gc_hal_raster_h_
@@ -948,6 +946,13 @@ gco2D_QueryU32(
     IN gco2D Engine,
     IN gce2D_QUERY Item,
     OUT gctUINT32_PTR Value
+    );
+
+gceSTATUS
+gco2D_SetStateU32(
+    IN gco2D Engine,
+    IN gce2D_STATE State,
+    IN gctUINT32 Value
     );
 
 #ifdef __cplusplus

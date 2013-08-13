@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2012-2013 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -75,6 +75,8 @@
 static int spdc_sel;
 static int max17135_regulator_init(struct max17135 *max17135);
 static struct clk *extern_audio_root;
+static void mx6sl_suspend_enter(void);
+static void mx6sl_suspend_exit(void);
 
 extern char *gp_reg_id;
 extern char *soc_reg_id;
@@ -313,13 +315,13 @@ static struct platform_device max17135_sensor_device = {
 
 static struct max17135_platform_data max17135_pdata __initdata = {
 	.vneg_pwrup = 1,
-	.gvee_pwrup = 1,
-	.vpos_pwrup = 2,
-	.gvdd_pwrup = 1,
+	.gvee_pwrup = 2,
+	.vpos_pwrup = 10,
+	.gvdd_pwrup = 12,
 	.gvdd_pwrdn = 1,
 	.vpos_pwrdn = 2,
-	.gvee_pwrdn = 1,
-	.vneg_pwrdn = 1,
+	.gvee_pwrdn = 8,
+	.vneg_pwrdn = 10,
 	.gpio_pmic_pwrgood = MX6SL_BRD_EPDC_PWRSTAT,
 	.gpio_pmic_vcom_ctrl = MX6SL_BRD_EPDC_VCOM,
 	.gpio_pmic_wakeup = MX6SL_BRD_EPDC_PMIC_WAKE,
@@ -580,14 +582,8 @@ static struct i2c_board_info mxc_i2c2_board_info[] __initdata = {
 };
 
 static struct mxc_dvfs_platform_data mx6sl_arm2_dvfscore_data = {
-#ifdef CONFIG_MX6_INTER_LDO_BYPASS
 	.reg_id			= "VDDCORE",
 	.soc_id			= "VDDSOC",
-#else
-	.reg_id			= "cpu_vddgp",
-	.soc_id			= "cpu_vddsoc",
-	.pu_id			= "cpu_vddvpu",
-#endif
 	.clk1_id		= "cpu_clk",
 	.clk2_id		= "gpc_dvfs_clk",
 	.gpc_cntr_offset	= MXC_GPC_CNTR_OFFSET,
@@ -623,7 +619,6 @@ static inline void mx6_arm2_init_uart(void)
 static int mx6sl_arm2_fec_phy_init(struct phy_device *phydev)
 {
 	int val;
-
 	/* power on FEC phy and reset phy */
 	gpio_request(MX6_BRD_FEC_PWR_EN, "fec-pwr");
 	gpio_direction_output(MX6_BRD_FEC_PWR_EN, 0);
@@ -636,7 +631,6 @@ static int mx6sl_arm2_fec_phy_init(struct phy_device *phydev)
 	if (val & BMCR_PDOWN) {
 		phy_write(phydev, 0x0, (val & ~BMCR_PDOWN));
 	}
-
 	return 0;
 }
 
@@ -728,8 +722,6 @@ static void epdc_enable_pins(void)
 
 static void epdc_disable_pins(void)
 {
-	/* Configure MUX settings for EPDC pins to
-	 * GPIO and drive to 0. */
 	mxc_iomux_v3_setup_multiple_pads(mx6sl_brd_epdc_disable_pads, \
 				ARRAY_SIZE(mx6sl_brd_epdc_disable_pads));
 
@@ -970,7 +962,7 @@ static void spdc_enable_pins(void)
 
 static void spdc_disable_pins(void)
 {
-	/* Configure MUX settings for SPDC pins to
+	/* Configure MUX settings for EPDC pins to
 	 * GPIO and drive to 0. */
 	mxc_iomux_v3_setup_multiple_pads(mx6sl_brd_spdc_disable_pads, \
 				ARRAY_SIZE(mx6sl_brd_spdc_disable_pads));
@@ -1081,7 +1073,6 @@ static void __init mx6_arm2_init_usb(void)
 	gpio_direction_output(MX6_BRD_USBOTG2_PWR, 1);
 
 	mx6_set_otghost_vbus_func(imx6_arm2_usbotg_vbus);
-	mx6_usb_dr_init();
 #ifdef CONFIG_USB_EHCI_ARC_HSIC
 	mxc_iomux_set_specialbits_register(MX6SL_PAD_HSIC_DAT,
 		PAD_CTL_DDR_SEL_DDR3, PAD_CTL_DDR_SEL_MASK);
@@ -1118,6 +1109,12 @@ static struct mxc_fb_platform_data fb_data[] = {
 
 static struct platform_device lcd_wvga_device = {
 	.name = "lcd_seiko",
+};
+
+static const struct pm_platform_data mx6sl_arm2_pm_data __initconst = {
+	.name		= "imx_pm",
+	.suspend_enter = mx6sl_suspend_enter,
+	.suspend_exit = mx6sl_suspend_exit,
 };
 
 static int mx6sl_arm2_keymap[] = {
@@ -1178,6 +1175,33 @@ static void mx6_snvs_poweroff(void)
 	writel(value | 0x60, mx6_snvs_base + SNVS_LPCR);
 }
 
+static void mx6sl_suspend_enter()
+{
+	iomux_v3_cfg_t *p = suspend_enter_pads;
+	int i;
+
+	/* Set PADCTRL to 0 for all IOMUX. */
+	for (i = 0; i < ARRAY_SIZE(suspend_enter_pads); i++) {
+		suspend_exit_pads[i] = *p;
+		*p &= ~MUX_PAD_CTRL_MASK;
+		/* Enable the Pull down and the keeper
+		  * Set the drive strength to 0.
+		  */
+		*p |= ((u64)0x3000 << MUX_PAD_CTRL_SHIFT);
+		p++;
+	}
+	mxc_iomux_v3_get_multiple_pads(suspend_exit_pads,
+			ARRAY_SIZE(suspend_exit_pads));
+	mxc_iomux_v3_setup_multiple_pads(suspend_enter_pads,
+			ARRAY_SIZE(suspend_enter_pads));
+}
+
+static void mx6sl_suspend_exit()
+{
+	mxc_iomux_v3_setup_multiple_pads(suspend_exit_pads,
+			ARRAY_SIZE(suspend_exit_pads));
+}
+
 /*!
  * Board specific initialization.
  */
@@ -1188,15 +1212,8 @@ static void __init mx6_arm2_init(void)
 
 	elan_ts_init();
 
-#ifdef CONFIG_MX6_INTER_LDO_BYPASS
 	gp_reg_id = mx6sl_arm2_dvfscore_data.reg_id;
 	soc_reg_id = mx6sl_arm2_dvfscore_data.soc_id;
-#else
-	gp_reg_id = mx6sl_arm2_dvfscore_data.reg_id;
-	soc_reg_id = mx6sl_arm2_dvfscore_data.soc_id;
-	pu_reg_id = mx6sl_arm2_dvfscore_data.pu_id;
-	mx6_cpu_regulator_init();
-#endif
 
 	imx6q_add_imx_snvs_rtc();
 
@@ -1267,6 +1284,7 @@ static void __init mx6_arm2_init(void)
 	imx6q_add_perfmon(0);
 	imx6q_add_perfmon(1);
 	imx6q_add_perfmon(2);
+	imx6q_add_pm_imx(0, &mx6sl_arm2_pm_data);
 
 	pm_power_off = mx6_snvs_poweroff;
 }

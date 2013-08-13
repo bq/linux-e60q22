@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2012 by Vivante Corp.
+*    Copyright (C) 2005 - 2013 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -17,8 +17,6 @@
 *    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 *
 *****************************************************************************/
-
-
 
 
 #ifndef __gc_hal_kernel_h_
@@ -134,6 +132,7 @@ gcskSECURE_CACHE;
 typedef enum _gceDATABASE_TYPE
 {
     gcvDB_VIDEO_MEMORY = 1,             /* Video memory created. */
+    gcvDB_COMMAND_BUFFER,               /* Command Buffer. */
     gcvDB_NON_PAGED,                    /* Non paged memory. */
     gcvDB_CONTIGUOUS,                   /* Contiguous memory. */
     gcvDB_SIGNAL,                       /* Signal. */
@@ -193,6 +192,9 @@ typedef struct _gcsDATABASE
     /* Secure cache. */
     gcskSECURE_CACHE                    cache;
 #endif
+
+    gctPOINTER                          handleDatabase;
+    gctPOINTER                          handleDatabaseMutex;
 }
 gcsDATABASE;
 
@@ -251,6 +253,63 @@ gckKERNEL_QueryProcessDB(
     OUT gcuDATABASE_INFO * Info
     );
 
+/* Dump the process database. */
+gceSTATUS
+gckKERNEL_DumpProcessDB(
+    IN gckKERNEL Kernel
+    );
+
+/* ID database */
+gceSTATUS
+gckKERNEL_CreateIntegerDatabase(
+    IN gckKERNEL Kernel,
+    OUT gctPOINTER * Database
+    );
+
+gceSTATUS
+gckKERNEL_DestroyIntegerDatabase(
+    IN gckKERNEL Kernel,
+    IN gctPOINTER Database
+    );
+
+gceSTATUS
+gckKERNEL_AllocateIntegerId(
+    IN gctPOINTER Database,
+    IN gctPOINTER Pointer,
+    OUT gctUINT32 * Id
+    );
+
+gceSTATUS
+gckKERNEL_FreeIntegerId(
+    IN gctPOINTER Database,
+    IN gctUINT32 Id
+    );
+
+gceSTATUS
+gckKERNEL_QueryIntegerId(
+    IN gctPOINTER Database,
+    IN gctUINT32 Id,
+    OUT gctPOINTER * Pointer
+    );
+
+gctUINT32
+gckKERNEL_AllocateNameFromPointer(
+    IN gckKERNEL Kernel,
+    IN gctPOINTER Pointer
+    );
+
+gctPOINTER
+gckKERNEL_QueryPointerFromName(
+    IN gckKERNEL Kernel,
+    IN gctUINT32 Name
+    );
+
+gceSTATUS
+gckKERNEL_DeleteName(
+    IN gckKERNEL Kernel,
+    IN gctUINT32 Name
+    );
+
 #if gcdSECURE_USER
 /* Get secure cache from the process database. */
 gceSTATUS
@@ -290,7 +349,28 @@ struct _gckDB
     gctUINT64                   idleTime;
     gctUINT64                   lastSlowdown;
     gctUINT64                   lastSlowdownIdle;
+    /* ID - Pointer database*/
+    gctPOINTER                  pointerDatabase;
+    gctPOINTER                  pointerDatabaseMutex;
 };
+
+#if gcdVIRTUAL_COMMAND_BUFFER
+typedef struct _gckVIRTUAL_COMMAND_BUFFER * gckVIRTUAL_COMMAND_BUFFER_PTR;
+typedef struct _gckVIRTUAL_COMMAND_BUFFER
+{
+    gctPHYS_ADDR                physical;
+    gctPOINTER                  userLogical;
+    gctPOINTER                  kernelLogical;
+    gctSIZE_T                   pageCount;
+    gctPOINTER                  pageTable;
+    gctUINT32                   gpuAddress;
+    gctUINT                     pid;
+    gckVIRTUAL_COMMAND_BUFFER_PTR   next;
+    gckVIRTUAL_COMMAND_BUFFER_PTR   prev;
+    gckKERNEL                   kernel;
+}
+gckVIRTUAL_COMMAND_BUFFER;
+#endif
 
 /* gckKERNEL object. */
 struct _gckKERNEL
@@ -328,6 +408,10 @@ struct _gckKERNEL
 
     /* The profile file name */
     gctCHAR                     profileFileName[gcdMAX_PROFILE_FILE_NAME];
+
+    /* Clear profile register or not*/
+    gctBOOL                     profileCleanRegister;
+
 #endif
 
 #ifdef QNX_SINGLE_THREADED_DEBUGGING
@@ -341,6 +425,7 @@ struct _gckKERNEL
 #if gcdENABLE_RECOVERY
     gctPOINTER                  resetFlagClearTimer;
     gctPOINTER                  resetAtom;
+    gctUINT64                   resetTimeStamp;
 #endif
 
     /* Pointer to gckEVENT object. */
@@ -350,6 +435,36 @@ struct _gckKERNEL
 #if gcdENABLE_VG
     gckVGKERNEL                 vg;
 #endif
+
+#if gcdVIRTUAL_COMMAND_BUFFER
+    gckVIRTUAL_COMMAND_BUFFER_PTR virtualBufferHead;
+    gckVIRTUAL_COMMAND_BUFFER_PTR virtualBufferTail;
+    gctPOINTER                    virtualBufferLock;
+#endif
+
+#if gcdDVFS
+    gckDVFS                     dvfs;
+#endif
+};
+
+struct _FrequencyHistory
+{
+    gctUINT32                   frequency;
+    gctUINT32                   count;
+};
+
+/* gckDVFS object. */
+struct _gckDVFS
+{
+    gckOS                       os;
+    gckHARDWARE                 hardware;
+    gctPOINTER                  timer;
+    gctUINT32                   pollingTime;
+    gctBOOL                     stop;
+    gctUINT32                   totalConfig;
+    gctUINT32                   loads[8];
+    gctUINT8                    currentScale;
+    struct _FrequencyHistory    frequencyHistory[16];
 };
 
 /* gckCOMMAND object. */
@@ -452,6 +567,8 @@ typedef struct _gcsEVENT
     /* Kernel. */
     gckKERNEL                   kernel;
 #endif
+
+    gctBOOL                     fromKernel;
 }
 gcsEVENT;
 
@@ -530,6 +647,8 @@ struct _gckEVENT
     gcsEVENT_QUEUE_PTR          freeList;
     gcsEVENT_QUEUE              repoList[gcdREPO_LIST_COUNT];
     gctPOINTER                  eventListMutex;
+
+    gctPOINTER                  submitTimer;
 };
 
 /* Free all events belonging to a process. */
@@ -733,6 +852,51 @@ struct _gckMMU
 #endif
 };
 
+#if gcdVIRTUAL_COMMAND_BUFFER
+gceSTATUS
+gckOS_CreateKernelVirtualMapping(
+    IN gctPHYS_ADDR Physical,
+    OUT gctSIZE_T * PageCount,
+    OUT gctPOINTER * Logical
+    );
+
+gceSTATUS
+gckOS_DestroyKernelVirtualMapping(
+    IN gctPOINTER Logical
+    );
+
+gceSTATUS
+gckKERNEL_AllocateVirtualCommandBuffer(
+    IN gckKERNEL Kernel,
+    IN gctBOOL InUserSpace,
+    IN OUT gctSIZE_T * Bytes,
+    OUT gctPHYS_ADDR * Physical,
+    OUT gctPOINTER * Logical
+    );
+
+gceSTATUS
+gckKERNEL_DestroyVirtualCommandBuffer(
+    IN gckKERNEL Kernel,
+    IN gctSIZE_T Bytes,
+    IN gctPHYS_ADDR Physical,
+    IN gctPOINTER Logical
+    );
+
+gceSTATUS
+gckKERNEL_GetGPUAddress(
+    IN gckKERNEL Kernel,
+    IN gctPOINTER Logical,
+    OUT gctUINT32 * Address
+    );
+
+gceSTATUS
+gckKERNEL_QueryGPUAddress(
+    IN gckKERNEL Kernel,
+    IN gctUINT32 GpuAddress,
+    OUT gckVIRTUAL_COMMAND_BUFFER_PTR * Buffer
+    );
+#endif
+
 gceSTATUS
 gckKERNEL_AttachProcess(
     IN gckKERNEL Kernel,
@@ -792,6 +956,23 @@ gckCONTEXT_Update(
     IN gctUINT32 ProcessID,
     IN gcsSTATE_DELTA_PTR StateDelta
     );
+
+#if gcdLINK_QUEUE_SIZE
+void
+gckLINKQUEUE_Enqueue(
+    IN gckLINKQUEUE LinkQueue,
+    IN gctUINT32 start,
+    IN gctUINT32 end
+    );
+
+void
+gckLINKQUEUE_GetData(
+    IN gckLINKQUEUE LinkQueue,
+    IN gctUINT32 Index,
+    OUT gckLINKDATA * Data
+    );
+#endif
+
 
 #ifdef __cplusplus
 }

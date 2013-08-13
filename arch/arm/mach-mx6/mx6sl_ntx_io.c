@@ -549,6 +549,9 @@ static int  ioctlDriver(struct file *filp, unsigned int command, unsigned long a
 			break;
 			
 		case CM_USB_Plug_IN:
+			if (!g_ioctl_USB_status && gpio_get_value (gMX6SL_NTX_ACIN_PG)) {
+				msleep(200);	// sleep 200ms to avoid system halt when USB plug out.
+			}
 			g_ioctl_USB_status = gpio_get_value (gMX6SL_NTX_ACIN_PG);
 			i = (g_ioctl_USB_status)?0:1;
 			if (!g_Cus_Ctrl_Led) {
@@ -1179,7 +1182,7 @@ static void power_key_chk(unsigned long v)
 	int iPwrKeyState=power_key_status();
 	if (iPwrKeyState) {
 		++g_power_key_debounce;
-		if ((2 == g_power_key_debounce)) {
+		if (2 == g_power_key_debounce) {
 			ntx_report_power(1);
 		}
 		mod_timer(&power_key_timer, jiffies + 1);
@@ -1311,7 +1314,7 @@ static int gpio_initials(void)
 #include <mach/arc_otg.h>
 #include "crm_regs.h"
 extern void __iomem *apll_base;
-unsigned long gUart2_ucr1;
+unsigned long gUart_ucr1;
 
 void ntx_gpio_suspend (void)
 {
@@ -1320,19 +1323,19 @@ void ntx_gpio_suspend (void)
 	gpio_direction_input (gMX6SL_ACT_LED);
 	gpio_direction_input (gMX6SL_ON_LED);
 
-	gpio_direction_output (GPIO_EP_3V3_ON, 0);
-	tps65185_ONOFF(0);
-	//gpio_direction_output (MX6SL_EP_PWRALL, 0);
-	
-	
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SCL__GPIO_3_14);
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SDA__GPIO_3_15);
-	gpio_request(IMX_GPIO_NR(3, 14), "i2c2_scl");
-	gpio_request(IMX_GPIO_NR(3, 15), "i2c2_sda");
-	gpio_direction_output (IMX_GPIO_NR(3, 14), 0);
-	gpio_direction_output (IMX_GPIO_NR(3, 15), 0);
-	
 	if (gSleep_Mode_Suspend) {
+		tps65185_ONOFF(0);
+		gpio_direction_output (GPIO_EP_3V3_ON, 0);
+		//gpio_direction_output (MX6SL_EP_PWRALL, 0);
+		
+		
+		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SCL__GPIO_3_14);
+		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SDA__GPIO_3_15);
+		gpio_request(IMX_GPIO_NR(3, 14), "i2c2_scl");
+		gpio_request(IMX_GPIO_NR(3, 15), "i2c2_sda");
+		gpio_direction_output (IMX_GPIO_NR(3, 14), 0);
+		gpio_direction_output (IMX_GPIO_NR(3, 15), 0);
+	
 		// turn off ir touch power.
 //		gpio_direction_output (gMX6SL_IR_TOUCH_INT, 0);
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__GPIO_3_12);
@@ -1345,11 +1348,14 @@ void ntx_gpio_suspend (void)
 //		gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
 		gpio_direction_output (GPIO_IR_3V3_ON, 0);
 	}
+	gUart_ucr1 = __raw_readl(ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
+	__raw_writel(0, ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
 
 }
 
 void ntx_gpio_resume (void)
 {
+	__raw_writel(gUart_ucr1, ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
 	if (gSleep_Mode_Suspend) {
 		// turn on ir touch power.
 		gpio_direction_output (GPIO_IR_3V3_ON, 1);
@@ -1362,14 +1368,16 @@ void ntx_gpio_resume (void)
 //		gpio_direction_output (gMX6SL_IR_TOUCH_RST, 1);
 	}
 	
-	gpio_free(IMX_GPIO_NR(3, 14));
-	gpio_free(IMX_GPIO_NR(3, 15));
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SCL__I2C2_SCL);
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SDA__I2C2_SDA);
-
-	tps65185_ONOFF(1);
-	gpio_direction_output (GPIO_EP_3V3_ON, 1);
-	//gpio_direction_output (MX6SL_EP_PWRALL, 1);
+		gpio_free(IMX_GPIO_NR(3, 14));
+		gpio_free(IMX_GPIO_NR(3, 15));
+		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SCL__I2C2_SCL);
+		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SDA__I2C2_SDA);
+	
+		gpio_direction_output (GPIO_EP_3V3_ON, 1);
+		mdelay (5);
+		tps65185_ONOFF(1);
+		//gpio_direction_output (MX6SL_EP_PWRALL, 1);
+	}
 	
 	g_power_key_pressed = power_key_status();	// POWER key
 	if (g_power_key_pressed) 

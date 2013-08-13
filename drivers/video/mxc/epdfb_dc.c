@@ -1326,6 +1326,60 @@ EPDFB_DC_RET epdfbdc_get_dirty_region(EPDFB_DC *I_pEPD_dc,\
 }
 
 
+EPDFB_DC_RET epdfbdc_set_width_height(EPDFB_DC *I_pEPD_dc,
+		unsigned long dwFBW,unsigned long dwFBH,
+		unsigned long dwW,unsigned long dwH)
+{
+	EPDFB_DC_RET tRet = EPDFB_DC_SUCCESS;
+	unsigned char bPixelBits;
+	unsigned long dwFBBits ;
+	unsigned long dwFBWBits;
+	unsigned long dwDCSize ,dwDCWidthBytes;
+
+	if(!CHK_EPDFB_DC(I_pEPD_dc)) {
+		ERR_MSG("%s(%d): object handle error !\n",__FUNCTION__,__LINE__);
+		return EPDFB_DC_OBJECTERR;
+	}
+
+	if(dwFBW<dwW) {
+		ERR_MSG("%s(%d): FBW(%d)<W(%d) !\n",__FUNCTION__,__LINE__,dwFBW,dwW);
+		return EPDFB_DC_PARAMERR;
+	}
+
+	if(dwFBH<dwH) {
+		ERR_MSG("%s(%d): FBH(%d)<H(%d) !\n",__FUNCTION__,__LINE__,dwFBH,dwH);
+		return EPDFB_DC_PARAMERR;
+	}
+
+	bPixelBits = I_pEPD_dc->bPixelBits;
+	dwFBBits = (dwFBW*dwFBH*bPixelBits);
+	dwFBWBits = (dwFBW*bPixelBits);
+	dwDCSize=dwFBBits>>3;
+	dwDCWidthBytes=dwFBWBits>>3;
+	
+	if(dwFBWBits&0x7) {
+		dwDCWidthBytes+=1;
+		dwDCSize+=dwFBH;
+	}
+
+	if(dwDCSize>I_pEPD_dc->dwDCSize) {
+		ERR_MSG("%s(%d): new DCSize(%d)>original DCSize(%d) !\n",__FUNCTION__,__LINE__,
+				dwDCSize,I_pEPD_dc->dwDCSize);
+		return EPDFB_DC_PARAMERR;
+	}
+
+	I_pEPD_dc->dwDCWidthBytes = dwDCWidthBytes;
+	I_pEPD_dc->dwDirtyOffsetEnd = dwDCSize;
+	I_pEPD_dc->dwDCSize = dwDCSize;
+
+	I_pEPD_dc->dwFBWExtra = dwFBW-dwW ;
+	I_pEPD_dc->dwFBHExtra = dwFBH-dwH ;
+	I_pEPD_dc->dwWidth = dwW;
+	I_pEPD_dc->dwHeight = dwH;
+	
+	return tRet;
+}
+
 EPDFB_DC_RET epdfbdc_rotate(EPDFB_DC *I_pEPD_dc,EPDFB_ROTATE_T I_tRotate)
 {
 	EPDFB_DC_RET tRet = EPDFB_DC_SUCCESS;

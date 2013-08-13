@@ -163,8 +163,10 @@ static struct regulator_init_data sw1a_init = {
 			.always_on = 1,
 			},
 #ifdef CONFIG_MX6_INTER_LDO_BYPASS
+#if 0
 	.num_consumer_supplies = ARRAY_SIZE(sw1_consumers),
 	.consumer_supplies = sw1_consumers,
+#endif
 #endif
 };
 
@@ -191,8 +193,10 @@ static struct regulator_init_data sw1c_init = {
 			.boot_on = 1,
 			},
 #ifdef CONFIG_MX6_INTER_LDO_BYPASS
+#if 0
 	.num_consumer_supplies = ARRAY_SIZE(sw1c_consumers),
 	.consumer_supplies = sw1c_consumers,
+#endif
 #endif
 };
 
@@ -427,8 +431,9 @@ err:
 
 static struct pfuze_regulator_init_data mx6q_sabreauto_pfuze100_regulators[] = {
 	{.id = PFUZE100_SW1A,	.init_data = &sw1a_init},
-	{.id = PFUZE100_SW1B,	.init_data = &sw1b_init},
+//	{.id = PFUZE100_SW1B,	.init_data = &sw1b_init},
 	{.id = PFUZE100_SW1C,	.init_data = &sw1c_init},
+#if 0
 	{.id = PFUZE100_SW2,	.init_data = &sw2_init},
 	{.id = PFUZE100_SW3A,	.init_data = &sw3a_init},
 	{.id = PFUZE100_SW3B,	.init_data = &sw3b_init},
@@ -442,6 +447,7 @@ static struct pfuze_regulator_init_data mx6q_sabreauto_pfuze100_regulators[] = {
 	{.id = PFUZE100_VGEN4,	.init_data = &vgen4_init},
 	{.id = PFUZE100_VGEN5,	.init_data = &vgen5_init},
 	{.id = PFUZE100_VGEN6,	.init_data = &vgen6_init},
+#endif
 };
 
 static struct pfuze_platform_data pfuze100_plat = {
@@ -453,6 +459,7 @@ static struct pfuze_platform_data pfuze100_plat = {
 
 static struct i2c_board_info __initdata pfuze100_i2c_device = {
 	I2C_BOARD_INFO(PFUZE100_I2C_DEVICE_NAME, PFUZE100_I2C_ADDR),
+	.irq=0,
 	.platform_data = &pfuze100_plat,
 };
 

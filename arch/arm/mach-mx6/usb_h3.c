@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2012 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2011-2013 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -89,12 +89,7 @@ static void fsl_usb_host_uninit_ext(struct platform_device *pdev)
 
 	fsl_usb_host_uninit(pdata);
 
-	usbh3_internal_phy_clock_gate(false);
-
-	clk_disable(usb_phy4_clk);
 	clk_put(usb_phy4_clk);
-
-	clk_disable(usb_oh3_clk);
 	clk_put(usb_oh3_clk);
 
 }
@@ -227,6 +222,7 @@ void __init mx6_usb_h3_init(void)
 	pdev = imx6q_add_fsl_ehci_hs(3, &usbh3_config);
 	usbh3_wakeup_config.usb_pdata[0] = pdev->dev.platform_data;
 	pdev_wakeup = imx6q_add_fsl_usb2_hs_wakeup(3, &usbh3_wakeup_config);
+	platform_device_add(pdev);
 	((struct fsl_usb2_platform_data *)(pdev->dev.platform_data))->wakeup_pdata =
 		pdev_wakeup->dev.platform_data;
 

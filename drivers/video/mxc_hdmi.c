@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2012 Freescale Semiconductor, Inc.
+ * Copyright (C) 2011-2013 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -94,7 +94,7 @@
 static const struct fb_videomode vga_mode = {
 	/* 640x480 @ 60 Hz, 31.5 kHz hsync */
 	NULL, 60, 640, 480, 39721, 48, 16, 33, 10, 96, 2, 0,
-	FB_VMODE_NONINTERLACED | FB_VMODE_ASPECT_4_3, 0,
+	FB_VMODE_NONINTERLACED | FB_VMODE_ASPECT_4_3, FB_MODE_IS_VESA,
 };
 
 static const struct fb_videomode xga_mode = {
@@ -148,7 +148,14 @@ struct hdmi_data_info {
 	unsigned int colorimetry;
 	unsigned int pix_repet_factor;
 	unsigned int hdcp_enable;
+	unsigned int rgb_out_enable;
 	struct hdmi_vmode video_mode;
+};
+
+struct hdmi_phy_reg_config {
+	/* HDMI PHY register config for pass HCT */
+	u16 reg_vlev;
+	u16 reg_cksymtx;
 };
 
 struct mxc_hdmi {
@@ -178,6 +185,8 @@ struct mxc_hdmi {
 	struct fb_videomode previous_mode;
 	struct fb_videomode previous_non_vga_mode;
 	bool requesting_vga_for_initialization;
+
+	struct hdmi_phy_reg_config phy_config;
 };
 
 struct i2c_client *hdmi_i2c;
@@ -186,6 +195,9 @@ static bool hdmi_inited;
 
 extern const struct fb_videomode mxc_cea_mode[64];
 extern void mxc_hdmi_cec_handle(u16 cec_stat);
+
+static void mxc_hdmi_setup(struct mxc_hdmi *hdmi, unsigned long event);
+
 #ifdef DEBUG
 static void dump_fb_videomode(struct fb_videomode *m)
 {
@@ -244,6 +256,43 @@ static ssize_t mxc_hdmi_show_edid(struct device *dev,
 }
 
 static DEVICE_ATTR(edid, S_IRUGO, mxc_hdmi_show_edid, NULL);
+
+static ssize_t mxc_hdmi_show_rgb_out_enable(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct mxc_hdmi *hdmi = dev_get_drvdata(dev);
+
+	if (hdmi->hdmi_data.rgb_out_enable == true)
+		strcpy(buf, "RGB out\n");
+	else
+		strcpy(buf, "YCbCr out\n");
+
+	return strlen(buf);
+}
+
+static ssize_t mxc_hdmi_store_rgb_out_enable(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct mxc_hdmi *hdmi = dev_get_drvdata(dev);
+	unsigned long value;
+	int ret;
+
+	ret = strict_strtoul(buf, 10, &value);
+	if (ret)
+		return ret;
+
+	hdmi->hdmi_data.rgb_out_enable = value;
+
+	/* Reconfig HDMI for output color space change */
+	mxc_hdmi_setup(hdmi, 0);
+
+	return count;
+}
+
+static DEVICE_ATTR(rgb_out_enable, S_IRUGO | S_IWUSR,
+				mxc_hdmi_show_rgb_out_enable,
+				mxc_hdmi_store_rgb_out_enable);
+
 
 /*!
  * this submodule is responsible for the video data synchronization.
@@ -1046,6 +1095,14 @@ static int hdmi_phy_configure(struct mxc_hdmi *hdmi, unsigned char pRep,
 	hdmi_phy_i2c_write(hdmi, 0x800d, 0x09);  /* CKSYMTXCTRL */
 	/* TX/CK LVL 10 */
 	hdmi_phy_i2c_write(hdmi, 0x01ad, 0x0E);  /* VLEVCTRL */
+
+	/* Board specific setting for PHY register 0x09, 0x0e to pass HCT */
+	if (hdmi->phy_config.reg_cksymtx != 0)
+		hdmi_phy_i2c_write(hdmi, hdmi->phy_config.reg_cksymtx, 0x09);
+
+	if (hdmi->phy_config.reg_vlev != 0)
+		hdmi_phy_i2c_write(hdmi, hdmi->phy_config.reg_vlev, 0x0E);
+
 	/* REMOVE CLK TERM */
 	hdmi_phy_i2c_write(hdmi, 0x8000, 0x05);  /* CKCALCTRL */
 
@@ -1373,7 +1430,7 @@ static int mxc_hdmi_read_edid(struct mxc_hdmi *hdmi)
 	memcpy(edid_old, hdmi->edid, HDMI_EDID_LEN);
 
 	ret = mxc_edid_read(hdmi_i2c->adapter, hdmi_i2c->addr, hdmi->edid,
-			    &hdmi->edid_cfg, hdmi->fbi);
+				&hdmi->edid_cfg, hdmi->fbi);
 
 	if (ret < 0)
 		return HDMI_EDID_FAIL;
@@ -1557,6 +1614,12 @@ static void mxc_hdmi_edid_rebuild_modelist(struct mxc_hdmi *hdmi)
 	console_unlock();
 }
 
+static void  mxc_hdmi_default_edid_cfg(struct mxc_hdmi *hdmi)
+{
+	/* Default setting HDMI working in HDMI mode */
+	hdmi->edid_cfg.hdmi_cap = true;
+}
+
 static void  mxc_hdmi_default_modelist(struct mxc_hdmi *hdmi)
 {
 	u32 i;
@@ -1572,16 +1635,17 @@ static void  mxc_hdmi_default_modelist(struct mxc_hdmi *hdmi)
 
 	fb_destroy_modelist(&hdmi->fbi->modelist);
 
+	/*Add XGA and SXGA to default modelist */
+	fb_add_videomode(&vga_mode, &hdmi->fbi->modelist);
+	fb_add_videomode(&xga_mode, &hdmi->fbi->modelist);
+	fb_add_videomode(&sxga_mode, &hdmi->fbi->modelist);
+
 	/*Add all no interlaced CEA mode to default modelist */
 	for (i = 0; i < ARRAY_SIZE(mxc_cea_mode); i++) {
 		mode = &mxc_cea_mode[i];
 		if (!(mode->vmode & FB_VMODE_INTERLACED) && (mode->xres != 0))
 			fb_add_videomode(mode, &hdmi->fbi->modelist);
 	}
-
-	/*Add XGA and SXGA to default modelist */
-	fb_add_videomode(&xga_mode, &hdmi->fbi->modelist);
-	fb_add_videomode(&sxga_mode, &hdmi->fbi->modelist);
 
 	console_unlock();
 }
@@ -1635,7 +1699,8 @@ static void mxc_hdmi_set_mode(struct mxc_hdmi *hdmi)
 				"%s: Video mode same as previous\n", __func__);
 		/* update fbi mode in case modelist is updated */
 		hdmi->fbi->mode = (struct fb_videomode *)mode;
-		mxc_hdmi_phy_init(hdmi);
+		/* update hdmi setting in case EDID data updated  */
+		mxc_hdmi_setup(hdmi, 0);
 	} else {
 		dev_dbg(&hdmi->pdev->dev, "%s: New video mode\n", __func__);
 		mxc_hdmi_set_mode_to_vga_dvi(hdmi);
@@ -1675,8 +1740,10 @@ static void mxc_hdmi_cable_connected(struct mxc_hdmi *hdmi)
 	case HDMI_EDID_SAME:
 		break;
 
-	case HDMI_EDID_NO_MODES:
 	case HDMI_EDID_FAIL:
+		mxc_hdmi_default_edid_cfg(hdmi);
+		/* No break here  */
+	case HDMI_EDID_NO_MODES:
 	default:
 		mxc_hdmi_default_modelist(hdmi);
 		break;
@@ -1920,8 +1987,10 @@ static void mxc_hdmi_setup(struct mxc_hdmi *hdmi, unsigned long event)
 	hdmi->hdmi_data.enc_in_format = RGB;
 
 	hdmi->hdmi_data.enc_out_format = RGB;
-	/*DVI mode not support non-RGB */
-	if (!hdmi->hdmi_data.video_mode.mDVI) {
+
+	/* YCbCr only enabled in HDMI mode */
+	if (!hdmi->hdmi_data.video_mode.mDVI &&
+		!hdmi->hdmi_data.rgb_out_enable) {
 		if (hdmi->edid_cfg.cea_ycbcr444)
 			hdmi->hdmi_data.enc_out_format = YCBCR444;
 		else if (hdmi->edid_cfg.cea_ycbcr422)
@@ -2092,6 +2161,7 @@ static int mxc_hdmi_disp_init(struct mxc_dispdrv_handle *disp,
 	int ret = 0;
 	u32 i;
 	const struct fb_videomode *mode;
+	struct fb_videomode m;
 	struct mxc_hdmi *hdmi = mxc_dispdrv_getdata(disp);
 	struct fsl_mxc_hdmi_platform_data *plat = hdmi->pdev->dev.platform_data;
 	int irq = platform_get_irq(hdmi->pdev, 0);
@@ -2134,6 +2204,10 @@ static int mxc_hdmi_disp_init(struct mxc_dispdrv_handle *disp,
 	/* Initialize HDMI */
 	if (plat->init)
 		plat->init(mxc_hdmi_ipu_id, mxc_hdmi_disp_id);
+
+	/* Specific phy config */
+	hdmi->phy_config.reg_cksymtx = plat->phy_reg_cksymtx;
+	hdmi->phy_config.reg_vlev = plat->phy_reg_vlev;
 
 	hdmi->hdmi_isfr_clk = clk_get(&hdmi->pdev->dev, "hdmi_isfr_clk");
 	if (IS_ERR(hdmi->hdmi_isfr_clk)) {
@@ -2205,6 +2279,21 @@ static int mxc_hdmi_disp_init(struct mxc_dispdrv_handle *disp,
 
 	console_unlock();
 
+	/* Find a nearest mode in default modelist */
+	fb_var_to_videomode(&m, &hdmi->fbi->var);
+	dump_fb_videomode(&m);
+
+	mode = fb_find_nearest_mode(&m, &hdmi->fbi->modelist);
+	if (!mode) {
+		pr_err("%s: could not find mode in modelist\n", __func__);
+		return -1;
+	}
+
+	fb_videomode_to_var(&hdmi->fbi->var, mode);
+
+	/* Default setting HDMI working in HDMI mode*/
+	hdmi->edid_cfg.hdmi_cap = true;
+
 	INIT_DELAYED_WORK(&hdmi->hotplug_work, hotplug_worker);
 
 	/* Configure registers related to HDMI interrupt
@@ -2220,6 +2309,9 @@ static int mxc_hdmi_disp_init(struct mxc_dispdrv_handle *disp,
 		goto efbclient;
 
 	memset(&hdmi->hdmi_data, 0, sizeof(struct hdmi_data_info));
+
+	/* Default HDMI working in RGB mode */
+	hdmi->hdmi_data.rgb_out_enable = true;
 
 	ret = request_irq(irq, mxc_hdmi_hotplug, IRQF_SHARED,
 			  dev_name(&hdmi->pdev->dev), hdmi);
@@ -2241,6 +2333,10 @@ static int mxc_hdmi_disp_init(struct mxc_dispdrv_handle *disp,
 	if (ret < 0)
 		dev_warn(&hdmi->pdev->dev,
 			"cound not create sys node for edid\n");
+	ret = device_create_file(&hdmi->pdev->dev, &dev_attr_rgb_out_enable);
+	if (ret < 0)
+		dev_warn(&hdmi->pdev->dev,
+			"cound not create sys node for rgb out enable\n");
 
 	dev_dbg(&hdmi->pdev->dev, "%s exit\n", __func__);
 
