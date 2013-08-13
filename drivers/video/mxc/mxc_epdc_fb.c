@@ -63,8 +63,9 @@
 #include <linux/gallen_dbg.h>
 
 //#define DO_NOT_POWEROFF				1
-#define NTX_WFM_MODE_OPTIMIZED 1
+//#define NTX_WFM_MODE_OPTIMIZED 1
 
+#define MX50_IOCTL_IF	1
 
 /*
  * Enable this define to have a default panel
@@ -6160,7 +6161,7 @@ static int mxc_epdc_fb_resume(struct platform_device *pdev)
 	mxc_epdc_fb_blank(FB_BLANK_UNBLANK, &data->info);
 #endif//] EPD_SUSPEND_BLANK
 
-	//epdc_init_settings(data);
+	epdc_init_settings(data);
 	
 	data->updates_active = false;
 

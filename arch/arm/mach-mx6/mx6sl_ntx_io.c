@@ -1366,7 +1366,6 @@ void ntx_gpio_resume (void)
 //		gpio_direction_input (gMX6SL_IR_TOUCH_INT);
 //		mdelay (20);
 //		gpio_direction_output (gMX6SL_IR_TOUCH_RST, 1);
-	}
 	
 		gpio_free(IMX_GPIO_NR(3, 14));
 		gpio_free(IMX_GPIO_NR(3, 15));
