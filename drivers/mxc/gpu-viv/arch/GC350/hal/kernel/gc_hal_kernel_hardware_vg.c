@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2012 by Vivante Corp.
+*    Copyright (C) 2005 - 2013 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -17,8 +17,6 @@
 *    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 *
 *****************************************************************************/
-
-
 
 
 #include "gc_hal.h"
@@ -310,6 +308,7 @@ gckVGHARDWARE_Construct(
 
     do
     {
+        gcmkERR_BREAK(gckOS_SetGPUPower(Os, gcvCORE_VG, gcvTRUE, gcvTRUE));
         status = _ResetGPU(Os);
 
         if (status != gcvSTATUS_OK)
@@ -342,10 +341,10 @@ gckVGHARDWARE_Construct(
 
         hardware->powerMutex            = gcvNULL;
         hardware->idleSignal            = gcvNULL;
-        hardware->chipPowerState        = gcvPOWER_OFF;
+        hardware->chipPowerState        = gcvPOWER_ON;
         hardware->chipPowerStateGlobal  = gcvPOWER_ON;
-        hardware->clockState            = gcvFALSE;
-        hardware->powerState            = gcvFALSE;
+        hardware->clockState            = gcvTRUE;
+        hardware->powerState            = gcvTRUE;
         hardware->powerOffTimeout       = gcdPOWEROFF_TIMEOUT;
         hardware->powerOffTime          = 0;
         hardware->timeIdleThread        = gcvNULL;
@@ -361,6 +360,8 @@ gckVGHARDWARE_Construct(
 
         /* Set default event mask. */
         hardware->eventMask = 0xFFFFFFFF;
+
+        gcmkERR_BREAK(gckOS_AtomConstruct(Os, &hardware->pageTableDirty));
 
         /* Set fast clear to auto. */
         gcmkVERIFY_OK(gckVGHARDWARE_SetFastClear(hardware, -1));
@@ -383,6 +384,11 @@ gckVGHARDWARE_Construct(
         return gcvSTATUS_OK;
     }
     while (gcvFALSE);
+
+    if (hardware->pageTableDirty != gcvNULL)
+    {
+        gcmkVERIFY_OK(gckOS_AtomDestroy(Os, hardware->pageTableDirty));
+    }
 
     if (hardware != gcvNULL)
     {
@@ -437,6 +443,11 @@ gckVGHARDWARE_Destroy(
     {
         gcmkVERIFY_OK(gckOS_DestroySignal(
             Hardware->os, Hardware->idleSignal));
+    }
+
+    if (Hardware->pageTableDirty != gcvNULL)
+    {
+        gcmkVERIFY_OK(gckOS_AtomDestroy(Hardware->os, Hardware->pageTableDirty));
     }
 
     /* Free the object. */
@@ -1277,26 +1288,6 @@ gceSTATUS gckVGHARDWARE_FlushMMU(
             | ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ? 2:2) - (0 ? 2:2) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 2:2) - (0 ? 2:2) + 1))))))) << (0 ? 2:2))) | (((gctUINT32) (0x1 & ((gctUINT32) ((((1 ? 2:2) - (0 ? 2:2) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 2:2) - (0 ? 2:2) + 1))))))) << (0 ? 2:2)))
             | ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ? 3:3) - (0 ? 3:3) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 3:3) - (0 ? 3:3) + 1))))))) << (0 ? 3:3))) | (((gctUINT32) (0x1 & ((gctUINT32) ((((1 ? 3:3) - (0 ? 3:3) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 3:3) - (0 ? 3:3) + 1))))))) << (0 ? 3:3)))
             | ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ? 4:4) - (0 ? 4:4) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 4:4) - (0 ? 4:4) + 1))))))) << (0 ? 4:4))) | (((gctUINT32) (0x1 & ((gctUINT32) ((((1 ? 4:4) - (0 ? 4:4) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 4:4) - (0 ? 4:4) + 1))))))) << (0 ? 4:4)));
-#if gcdPOWER_MANAGEMENT
-        /* Acquire the power management semaphore. */
-        gcmkERR_BREAK(gckOS_AcquireSemaphore(Hardware->os,
-                               command->powerSemaphore));
-
-        status = gckVGCOMMAND_Execute(
-                            command,
-                            commandBuffer
-                            );
-        /* Acquire the power management semaphore. */
-        gcmkVERIFY_OK(gckOS_ReleaseSemaphore(Hardware->os,
-                               command->powerSemaphore));
-
-        gcmkERR_BREAK(status);
-#else
-        gcmkERR_BREAK(gckVGCOMMAND_Execute(
-            command,
-            commandBuffer
-            ));
-#endif
     }
     while(gcvFALSE);
 
@@ -1809,6 +1800,8 @@ gckVGHARDWARE_SetPowerManagementState(
 
     if (flag & gcvPOWER_FLAG_INITIALIZE)
     {
+        gcmkONERROR(gckVGHARDWARE_SetMMU(Hardware, Hardware->kernel->mmu->pageTableLogical));
+
         /* Force the command queue to reload the next context. */
         command->currentContext = 0;
     }

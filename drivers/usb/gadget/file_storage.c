@@ -3608,6 +3608,8 @@ static int __ref fsg_bind(struct usb_gadget *gadget)
 		sprintf(&fsg_string_serial[i], "%02X", c);
 	}
 	}
+	fsg_strings[FSG_STRING_SERIAL - 1].s = fsg_string_serial;
+	device_desc.iSerialNumber = FSG_STRING_SERIAL;
 	printk ("[%s-%d] mfg = %s , SN = %s\n",__func__, __LINE__, fsg_string_manufacturer, fsg_string_serial);
 
 	fsg->thread_task = kthread_create(fsg_main_thread, fsg,

@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2012 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2005-2013 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -21,16 +21,11 @@
 
 #include <linux/module.h>
 #include <linux/init.h>
-#include <linux/slab.h>
-#include <linux/ctype.h>
 #include <linux/types.h>
 #include <linux/delay.h>
-#include <linux/semaphore.h>
 #include <linux/device.h>
 #include <linux/i2c.h>
-#include <linux/wait.h>
 #include <linux/videodev2.h>
-#include <linux/workqueue.h>
 #include <linux/regulator/consumer.h>
 #include <linux/fsl_devices.h>
 #include <media/v4l2-chip-ident.h>
@@ -238,10 +233,6 @@ static void adv7180_get_std(v4l2_std_id *std)
 
 	dev_dbg(&adv7180_data.sen.i2c_client->dev, "In adv7180_get_std\n");
 
-	/* Make sure power on */
-	if (tvin_plat->pwdn)
-		tvin_plat->pwdn(0);
-
 	/* Read the AD_RESULT to get the detect output video standard */
 	tmp = adv7180_read(ADV7180_STATUS_1) & 0x70;
 
@@ -332,13 +323,14 @@ static int ioctl_s_power(struct v4l2_int_device *s, int on)
 
 	if (on && !sensor->sen.on) {
 		gpio_sensor_active();
-
-		/* Make sure pwoer on */
-		if (tvin_plat->pwdn)
-			tvin_plat->pwdn(0);
-
-		if (adv7180_write_reg(ADV7180_PWR_MNG, 0) != 0)
+		if (adv7180_write_reg(ADV7180_PWR_MNG, 0x04) != 0)
 			return -EIO;
+
+		/*
+		 * FIXME:Additional 400ms to wait the chip to be stable?
+		 * This is a workaround for preview scrolling issue.
+		 */
+		msleep(400);
 	} else if (!on && sensor->sen.on) {
 		if (adv7180_write_reg(ADV7180_PWR_MNG, 0x24) != 0)
 			return -EIO;
@@ -503,10 +495,6 @@ static int ioctl_g_ctrl(struct v4l2_int_device *s, struct v4l2_control *vc)
 
 	dev_dbg(&adv7180_data.sen.i2c_client->dev, "In adv7180:ioctl_g_ctrl\n");
 
-	/* Make sure power on */
-	if (tvin_plat->pwdn)
-		tvin_plat->pwdn(0);
-
 	switch (vc->id) {
 	case V4L2_CID_BRIGHTNESS:
 		dev_dbg(&adv7180_data.sen.i2c_client->dev,
@@ -601,10 +589,6 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s, struct v4l2_control *vc)
 
 	dev_dbg(&adv7180_data.sen.i2c_client->dev, "In adv7180:ioctl_s_ctrl\n");
 
-	/* Make sure power on */
-	if (tvin_plat->pwdn)
-		tvin_plat->pwdn(0);
-
 	switch (vc->id) {
 	case V4L2_CID_BRIGHTNESS:
 		dev_dbg(&adv7180_data.sen.i2c_client->dev,
@@ -677,6 +661,26 @@ static int ioctl_s_ctrl(struct v4l2_int_device *s, struct v4l2_control *vc)
 	}
 
 	return retval;
+}
+
+/*!
+ * ioctl_enum_framesizes - V4L2 sensor interface handler for
+ *			   VIDIOC_ENUM_FRAMESIZES ioctl
+ * @s: pointer to standard V4L2 device structure
+ * @fsize: standard V4L2 VIDIOC_ENUM_FRAMESIZES ioctl structure
+ *
+ * Return 0 if successful, otherwise -EINVAL.
+ */
+static int ioctl_enum_framesizes(struct v4l2_int_device *s,
+				 struct v4l2_frmsizeenum *fsize)
+{
+	if (fsize->index >= 1)
+		return -EINVAL;
+
+	fsize->discrete.width = video_fmts[video_idx].active_width;
+	fsize->discrete.height  = video_fmts[video_idx].active_height;
+
+	return 0;
 }
 
 /*!
@@ -768,6 +772,8 @@ static struct v4l2_int_ioctl_desc adv7180_ioctl_desc[] = {
 	{vidioc_int_queryctrl_num, (v4l2_int_ioctl_func*)ioctl_queryctrl},
 	{vidioc_int_g_ctrl_num, (v4l2_int_ioctl_func*)ioctl_g_ctrl},
 	{vidioc_int_s_ctrl_num, (v4l2_int_ioctl_func*)ioctl_s_ctrl},
+	{vidioc_int_enum_framesizes_num,
+				(v4l2_int_ioctl_func *) ioctl_enum_framesizes},
 	{vidioc_int_g_chip_ident_num,
 				(v4l2_int_ioctl_func *)ioctl_g_chip_ident},
 };
@@ -1181,14 +1187,12 @@ static int adv7180_probe(struct i2c_client *client,
  */
 static int adv7180_detach(struct i2c_client *client)
 {
-	struct fsl_mxc_tvin_platform_data *plat_data = client->dev.platform_data;
-
 	dev_dbg(&adv7180_data.sen.i2c_client->dev,
 		"%s:Removing %s video decoder @ 0x%02X from adapter %s\n",
 		__func__, IF_NAME, client->addr << 1, client->adapter->name);
 
-	if (plat_data->pwdn)
-		plat_data->pwdn(1);
+	/* Power down via i2c */
+	adv7180_write_reg(ADV7180_PWR_MNG, 0x24);
 
 	if (dvddio_regulator) {
 		regulator_disable(dvddio_regulator);

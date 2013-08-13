@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2012 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2004-2013 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -447,9 +447,15 @@ static int mxcfb_set_par(struct fb_info *fbi)
 	if (mxc_fbi->ovfbi)
 		mxc_fbi_fg = (struct mxcfb_info *)mxc_fbi->ovfbi->par;
 
-	if (mxc_fbi->ovfbi && mxc_fbi_fg)
-		if (mxc_fbi_fg->next_blank == FB_BLANK_UNBLANK)
+	if (mxc_fbi->ovfbi && mxc_fbi_fg) {
+		if (mxc_fbi_fg->cur_blank == FB_BLANK_UNBLANK) {
+			dev_warn(fbi->device, "overlay is still on.\n");
+			return 0;
+		}
+		if ((mxc_fbi_fg->next_blank == FB_BLANK_UNBLANK) &&
+			mxcfb_need_to_set_par(mxc_fbi->ovfbi))
 			ovfbi_enable = true;
+	}
 
 	if (!mxcfb_need_to_set_par(fbi))
 		return 0;
@@ -473,6 +479,7 @@ static int mxcfb_set_par(struct fb_info *fbi)
 		ipu_disable_irq(mxc_fbi_fg->ipu, mxc_fbi_fg->ipu_ch_nf_irq);
 		ipu_disable_channel(mxc_fbi_fg->ipu, mxc_fbi_fg->ipu_ch, true);
 		ipu_uninit_channel(mxc_fbi_fg->ipu, mxc_fbi_fg->ipu_ch);
+		mxc_fbi_fg->cur_blank = FB_BLANK_POWERDOWN;
 	}
 
 	ipu_clear_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
@@ -481,6 +488,14 @@ static int mxcfb_set_par(struct fb_info *fbi)
 	ipu_disable_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_nf_irq);
 	ipu_disable_channel(mxc_fbi->ipu, mxc_fbi->ipu_ch, true);
 	ipu_uninit_channel(mxc_fbi->ipu, mxc_fbi->ipu_ch);
+
+	/*
+	 * Disable IPU hsp clock if it is enabled for an
+	 * additional time in ipu common driver.
+	 */
+	if (mxc_fbi->first_set_par && mxc_fbi->late_init)
+		ipu_disable_hsp_clk(mxc_fbi->ipu);
+
 	mxcfb_set_fix(fbi);
 
 	mem_len = fbi->var.yres_virtual * fbi->fix.line_length;
@@ -648,6 +663,10 @@ static int mxcfb_set_par(struct fb_info *fbi)
 	}
 
 	mxc_fbi->cur_var = fbi->var;
+	if (ovfbi_enable) {
+		mxc_fbi_fg->cur_blank = FB_BLANK_UNBLANK;
+		mxc_fbi_fg->cur_var = mxc_fbi->ovfbi->var;
+	}
 
 	return retval;
 }
@@ -1311,6 +1330,20 @@ static int mxcfb_ioctl(struct fb_info *fbi, unsigned int cmd, unsigned long arg)
 				return -EFAULT;
 
 			break;
+		}
+	case MXCFB_CSC_UPDATE:
+		{
+			struct mxcfb_csc_matrix csc;
+
+			if (copy_from_user(&csc, (void *) arg, sizeof(csc)))
+				return -EFAULT;
+
+			if ((mxc_fbi->ipu_ch != MEM_FG_SYNC) &&
+				(mxc_fbi->ipu_ch != MEM_BG_SYNC) &&
+				(mxc_fbi->ipu_ch != MEM_BG_ASYNC0))
+				return -EFAULT;
+			ipu_set_csc_coefficients(mxc_fbi->ipu, mxc_fbi->ipu_ch,
+						csc.param);
 		}
 	default:
 		retval = -EINVAL;
@@ -2018,41 +2051,6 @@ static int mxcfb_register(struct fb_info *fbi)
 	fb_var_to_videomode(&m, &fbi->var);
 	fb_add_videomode(&m, &fbi->modelist);
 
-	if (!mxcfbi->late_init) {
-		fbi->var.activate |= FB_ACTIVATE_FORCE;
-		console_lock();
-		fbi->flags |= FBINFO_MISC_USEREVENT;
-		ret = fb_set_var(fbi, &fbi->var);
-		fbi->flags &= ~FBINFO_MISC_USEREVENT;
-		console_unlock();
-
-		if (mxcfbi->next_blank == FB_BLANK_UNBLANK) {
-			console_lock();
-			fb_blank(fbi, FB_BLANK_UNBLANK);
-			console_unlock();
-		}
-	} else {
-		/*
-		 * Setup the channel again though bootloader
-		 * has done this, then set_par() can stop the
-		 * channel and re-initialize it. Moreover,
-		 * ipu_init_channel() enables ipu hsp clock,
-		 * so we may keep the clock on until user
-		 * space triggers set_par(), i.e., any ipu
-		 * interface which enables/disables ipu hsp
-		 * clock with pair(called in IPUv3 fb driver
-		 * or mxc v4l2 driver<probed after fb driver>)
-		 * cannot eventually disables the clock to
-		 * damage the channel.
-		 */
-		if (mxcfbi->next_blank == FB_BLANK_UNBLANK) {
-			console_lock();
-			_setup_disp_channel1(fbi);
-			ipu_enable_channel(mxcfbi->ipu, mxcfbi->ipu_ch);
-			console_unlock();
-		}
-	}
-
 	if (ipu_request_irq(mxcfbi->ipu, mxcfbi->ipu_ch_irq,
 		mxcfb_irq_handler, IPU_IRQF_ONESHOT, MXCFB_NAME, fbi) != 0) {
 		dev_err(fbi->device, "Error registering EOF irq handler.\n");
@@ -2078,19 +2076,49 @@ static int mxcfb_register(struct fb_info *fbi)
 			goto err2;
 		}
 
+	if (!mxcfbi->late_init) {
+		fbi->var.activate |= FB_ACTIVATE_FORCE;
+		console_lock();
+		fbi->flags |= FBINFO_MISC_USEREVENT;
+		ret = fb_set_var(fbi, &fbi->var);
+		fbi->flags &= ~FBINFO_MISC_USEREVENT;
+		console_unlock();
+		if (ret < 0) {
+			dev_err(fbi->device, "Error fb_set_var ret:%d\n", ret);
+			goto err3;
+		}
+
+		if (mxcfbi->next_blank == FB_BLANK_UNBLANK) {
+			console_lock();
+			ret = fb_blank(fbi, FB_BLANK_UNBLANK);
+			console_unlock();
+			if (ret < 0) {
+				dev_err(fbi->device,
+					"Error fb_blank ret:%d\n", ret);
+				goto err4;
+			}
+		}
+	} else {
+		/*
+		 * Setup the channel again though bootloader
+		 * has done this, then set_par() can stop the
+		 * channel neatly and re-initialize it .
+		 */
+		if (mxcfbi->next_blank == FB_BLANK_UNBLANK) {
+			console_lock();
+			_setup_disp_channel1(fbi);
+			ipu_enable_channel(mxcfbi->ipu, mxcfbi->ipu_ch);
+			console_unlock();
+		}
+	}
+
+
 	ret = register_framebuffer(fbi);
 	if (ret < 0)
-		goto err3;
+		goto err5;
 
 	return ret;
-err3:
-	if (mxcfbi->ipu_alp_ch_irq != -1)
-		ipu_free_irq(mxcfbi->ipu, mxcfbi->ipu_alp_ch_irq, fbi);
-err2:
-	ipu_free_irq(mxcfbi->ipu, mxcfbi->ipu_ch_nf_irq, fbi);
-err1:
-	ipu_free_irq(mxcfbi->ipu, mxcfbi->ipu_ch_irq, fbi);
-err0:
+err5:
 	if (mxcfbi->next_blank == FB_BLANK_UNBLANK) {
 		console_lock();
 		if (!mxcfbi->late_init)
@@ -2102,6 +2130,15 @@ err0:
 		}
 		console_unlock();
 	}
+err4:
+err3:
+	if (mxcfbi->ipu_alp_ch_irq != -1)
+		ipu_free_irq(mxcfbi->ipu, mxcfbi->ipu_alp_ch_irq, fbi);
+err2:
+	ipu_free_irq(mxcfbi->ipu, mxcfbi->ipu_ch_nf_irq, fbi);
+err1:
+	ipu_free_irq(mxcfbi->ipu, mxcfbi->ipu_ch_irq, fbi);
+err0:
 	return ret;
 }
 

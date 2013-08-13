@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2012 by Vivante Corp.
+*    Copyright (C) 2005 - 2013 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -17,9 +17,6 @@
 *    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 *
 *****************************************************************************/
-
-
-
 
 
 #include "gc_hal.h"
@@ -474,7 +471,7 @@ _InitializeContextBuffer(
     index += _SwitchPipe(Context, index, gcvPIPE_3D);
 
     /* Current context pointer. */
-#if gcdDEBUG && 1
+#if gcdDEBUG 
     index += _State(Context, index, 0x03850 >> 2, 0x00000000, 1, gcvFALSE, gcvFALSE);
 #endif
 
@@ -623,6 +620,7 @@ _InitializeContextBuffer(
         index += _State(Context, index, 0x10180 >> 2, 0x00000000, 32, gcvFALSE, gcvFALSE);
         index += _State(Context, index, 0x10200 >> 2, 0x00000000, 32, gcvFALSE, gcvFALSE);
         index += _State(Context, index, 0x10280 >> 2, 0x00000000, 32, gcvFALSE, gcvFALSE);
+        index += _State(Context, index, 0x02C00 >> 2, 0x00000000, 256, gcvFALSE, gcvFALSE);
         index += _State(Context, index, 0x10300 >> 2, 0x00000000, 32, gcvFALSE, gcvFALSE);
         index += _State(Context, index, 0x10380 >> 2, 0x00321000, 32, gcvFALSE, gcvFALSE);
         index += _State(Context, index, 0x10400 >> 2, 0x00000000, 32, gcvFALSE, gcvFALSE);
@@ -905,12 +903,24 @@ _DestroyContext(
             /* Free state delta map. */
             if (buffer->logical != gcvNULL)
             {
-                gcmkONERROR(gckOS_FreeContiguous(
-                    Context->os,
+#if gcdVIRTUAL_COMMAND_BUFFER
+                gcmkONERROR(gckEVENT_DestroyVirtualCommandBuffer(
+                    Context->hardware->kernel->eventObj,
+                    Context->totalSize,
                     buffer->physical,
                     buffer->logical,
-                    Context->totalSize
+                    gcvKERNEL_PIXEL
                     ));
+
+#else
+                gcmkONERROR(gckEVENT_FreeContiguousMemory(
+                    Context->hardware->kernel->eventObj,
+                    Context->totalSize,
+                    buffer->physical,
+                    buffer->logical,
+                    gcvKERNEL_PIXEL
+                    ));
+#endif
 
                 buffer->logical = gcvNULL;
             }
@@ -1148,6 +1158,16 @@ gckCONTEXT_Construct(
             ));
 
         /* Create a new physical context buffer. */
+#if gcdVIRTUAL_COMMAND_BUFFER
+        gcmkONERROR(gckKERNEL_AllocateVirtualCommandBuffer(
+            context->hardware->kernel,
+            gcvFALSE,
+            &context->totalSize,
+            &buffer->physical,
+            &pointer
+            ));
+
+#else
         gcmkONERROR(gckOS_AllocateContiguous(
             Os,
             gcvFALSE,
@@ -1155,6 +1175,7 @@ gckCONTEXT_Construct(
             &buffer->physical,
             &pointer
             ));
+#endif
 
         buffer->logical = pointer;
 
@@ -1233,11 +1254,11 @@ gckCONTEXT_Construct(
             }
 
             /* Copy the current context. */
-            gcmkONERROR(gckOS_MemCopy(
+            gckOS_MemCopy(
                 tempContext->logical,
                 currContext->logical,
                 context->totalSize
-                ));
+                );
 
             /* Get the next context buffer. */
             tempContext = tempContext->next;
@@ -1418,7 +1439,7 @@ gckCONTEXT_Update(
             gcmkONERROR(gckKERNEL_OpenUserData(
                 kernel, needCopy,
                 Context->recordArray,
-                kDelta->recordArray, Context->recordArraySize,
+                gcmUINT64_TO_PTR(kDelta->recordArray), Context->recordArraySize,
                 (gctPOINTER *) &recordArray
                 ));
 
@@ -1527,13 +1548,13 @@ gckCONTEXT_Update(
             gcmkASSERT(kDelta->refCount >= 0);
 
             /* Get the next state delta. */
-            nDelta = kDelta->next;
+            nDelta = gcmUINT64_TO_PTR(kDelta->next);
 
             /* Get access to the state records. */
             gcmkONERROR(gckKERNEL_CloseUserData(
                 kernel, needCopy,
                 gcvFALSE,
-                kDelta->recordArray, Context->recordArraySize,
+                gcmUINT64_TO_PTR(kDelta->recordArray), Context->recordArraySize,
                 (gctPOINTER *) &recordArray
                 ));
 
@@ -1680,7 +1701,7 @@ OnError:
         gcmkVERIFY_OK(gckKERNEL_CloseUserData(
             kernel, needCopy,
             gcvFALSE,
-            kDelta->recordArray, Context->recordArraySize,
+            gcmUINT64_TO_PTR(kDelta->recordArray), Context->recordArraySize,
             (gctPOINTER *) &recordArray
             ));
 	}

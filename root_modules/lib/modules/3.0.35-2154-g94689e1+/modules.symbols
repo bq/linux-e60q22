@@ -1,5 +1,12 @@
 # Aliases for symbols, used by symbol_request().
+alias symbol:imx_usb_remove_charger arcotg_udc
+alias symbol:imx_usb_vbus_disconnect arcotg_udc
+alias symbol:imx_usb_set_power arcotg_udc
 alias symbol:crc_ccitt crc_ccitt
+alias symbol:usb_gadget_probe_driver arcotg_udc
 alias symbol:crc_ccitt_table crc_ccitt
+alias symbol:imx_usb_create_charger arcotg_udc
 alias symbol:bcmsdh_remove dhd
+alias symbol:imx_usb_vbus_connect arcotg_udc
 alias symbol:bcmsdh_probe dhd
+alias symbol:usb_gadget_unregister_driver arcotg_udc

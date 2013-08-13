@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2012 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2005-2013 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * Author: Li Yang <LeoLi@freescale.com>
  *         Jerry Huang <Chang-Ming.Huang@freescale.com>
@@ -607,6 +607,9 @@ int fsl_otg_start_gadget(struct otg_fsm *fsm, int on)
 static int fsl_otg_set_host(struct otg_transceiver *otg_p, struct usb_bus *host)
 {
 	struct fsl_otg *otg_dev = container_of(otg_p, struct fsl_otg, otg);
+	struct fsl_usb2_platform_data *pdata;
+
+	pdata = otg_dev->otg.dev->platform_data;
 
 	if (!otg_p || otg_dev != fsl_otg_dev)
 		return -ENODEV;
@@ -628,11 +631,18 @@ static int fsl_otg_set_host(struct otg_transceiver *otg_p, struct usb_bus *host)
 
 		if (otg_dev->fsm.id) {
 			otg_dev->host_first_call = true;
+			/* The discharge will be false when the controller
+			 * is ready to use.
+			 */
+			if (pdata->dr_discharge_line)
+				pdata->dr_discharge_line(true);
 			schedule_otg_work(&otg_dev->otg_event, 100);
 		}
 		else {
 			/* if the device is already at the port */
 			otg_drv_vbus(&otg_dev->fsm, 1);
+			if (pdata->dr_discharge_line)
+				pdata->dr_discharge_line(false);
 			fsl_otg_wait_stable_vbus(true);
 			b_session_irq_enable(false);
 			fsl_otg_start_host(&otg_dev->fsm, 1);
@@ -680,9 +690,16 @@ static int fsl_otg_set_peripheral(struct otg_transceiver *otg_p,
 		return -ENODEV;
 
 	if (!gadget) {
-		if (!otg_dev->otg.default_a)
+		/*
+		 * At i.mx platform, we still not implement fully
+		 * OTG.
+		 */
+		/*
+		if (!otg_dev->otg.default_a) {
 			otg_p->gadget->ops->vbus_draw(otg_p->gadget, 0);
-		usb_gadget_vbus_disconnect(otg_dev->otg.gadget);
+			usb_gadget_vbus_disconnect(otg_dev->otg.gadget);
+		}
+		*/
 		otg_dev->otg.gadget = 0;
 		otg_dev->fsm.b_bus_req = 0;
 		pdata->port_enables = 0;
@@ -1398,6 +1415,7 @@ static int fsl_otg_remove(struct platform_device *pdev)
 
 	kfree(fsl_otg_dev);
 
+	fsl_otg_dev = NULL;
 	remove_proc_file();
 
 	unregister_chrdev(FSL_OTG_MAJOR, FSL_OTG_NAME);

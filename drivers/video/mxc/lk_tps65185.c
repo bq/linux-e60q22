@@ -1007,6 +1007,7 @@ int tps65185_init(int iPort,int iEPDTimingType)
 		GALLEN_DBGLOCAL_ESC();
 		return iChk;
 	}
+	printk ("[%s-%d] gpio_to_irq ()\n",__func__,__LINE__);
 
 #ifdef TPS65185_PWR_ONOFF_INT//[
 
@@ -1883,9 +1884,6 @@ int tps65185_suspend(void)
 
 	flush_workqueue(tps65185_pwrgood_workqueue);
 	flush_workqueue(tps65185_int_workqueue);
-
-
-
 	
 	//tps65185_wait_panel_poweroff();
 
@@ -1893,17 +1891,6 @@ int tps65185_suspend(void)
 	//TPS65185_REG_SET(INT_EN1,ALL,bVal);
 	//TPS65185_REG_SET(INT_EN2,ALL,bVal);
 	//TPS65185_REG_SET(ENABLE,ALL,bVal);
-#ifdef TPS65185_PWR_ONOFF_INT//[
-
-	irq = gpio_to_irq(GPIO_TPS65185_INT);
-	free_irq(irq,0);
-	//disable_irq(irq);
-	irq = gpio_to_irq(GPIO_TPS65185_PWRGOOD);
-	free_irq(irq,0);
-	//disable_irq(irq);
-
-#endif //] TPS65185_PWR_ONOFF_INT
-
 
 	dwTPS65185_mode = TPS65185_MODE_SLEEP;
 	tps65185_chg_mode(&dwTPS65185_mode,1);
@@ -1914,6 +1901,14 @@ int tps65185_suspend(void)
 		//tps65185_resume();
 	}
 
+	irq = gpio_to_irq(GPIO_TPS65185_INT);
+	free_irq(irq,0);
+	//disable_irq(irq);
+#ifdef TPS65185_PWR_ONOFF_INT//[
+	irq = gpio_to_irq(GPIO_TPS65185_PWRGOOD);
+	free_irq(irq,0);
+	//disable_irq(irq);
+#endif //] TPS65185_PWR_ONOFF_INT
 
 #if 0
 	if(gSleep_Mode_Suspend) {
@@ -1931,6 +1926,7 @@ void tps65185_resume(void)
 {
 #ifdef TPS65185_SUSPEND //[
 	unsigned long dwTPS65185_mode;
+	int irq,iChk;
 
 	dbgENTER();
 	
@@ -1945,15 +1941,14 @@ void tps65185_resume(void)
 	dwTPS65185_mode = TPS65185_MODE_STANDBY;
 	tps65185_chg_mode(&dwTPS65185_mode,1);
 
+	irq = gpio_to_irq(GPIO_TPS65185_INT);
+//	enable_irq(irq);
+	iChk = request_irq(irq, tps65185_int, 0, "tps65185_INT", 0);
+	if (iChk) {
+		pr_info("register TPS65185 interrupt failed\n");
+	}
 #ifdef TPS65185_PWR_ONOFF_INT//[
 	{
-		int irq,iChk;
-		irq = gpio_to_irq(GPIO_TPS65185_INT);
-		//enable_irq(irq);
-		iChk = request_irq(irq, tps65185_int, 0, "tps65185_INT", 0);
-		if (iChk) {
-			pr_info("register TPS65185 interrupt failed\n");
-		}
 
 		irq = gpio_to_irq(GPIO_TPS65185_PWRGOOD);
 		//enable_irq(irq);

@@ -166,6 +166,9 @@ EPDFB_DC_RET epdfbdc_get_rotate_active(EPDFB_DC *I_pEPD_dc,
 	unsigned long *IO_pdwW,unsigned long *IO_pdwH,
 	EPDFB_ROTATE_T I_tRotate);
 	
+EPDFB_DC_RET epdfbdc_set_width_height(EPDFB_DC *I_pEPD_dc,
+		unsigned long dwFBW,unsigned long dwFBH,
+		unsigned long dwW,unsigned long dwH);
 
 #endif //]__epdfb_dc_h
 

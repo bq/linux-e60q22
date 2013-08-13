@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2012-2013 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -2427,23 +2427,30 @@ static int _clk_ssi1_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-static struct clk ssi1_clk = {
-	__INIT_CLK_DEBUG(ssi1_clk)
-	.parent = &pll3_pfd2_508M,
-	.enable_reg = MXC_CCM_CCGR5,
-	.enable_shift = MXC_CCM_CCGRx_CG9_OFFSET,
-	.enable = _clk_enable,
-	.disable = _clk_disable,
-	.set_parent = _clk_ssi1_set_parent,
-	.set_rate = _clk_ssi1_set_rate,
-	.round_rate = _clk_ssi_round_rate,
-	.get_rate = _clk_ssi1_get_rate,
-#ifdef CONFIG_SND_MXC_SOC_IRAM
-	 .secondary = &ocram_clk,
-#else
+static struct clk ssi1_clk[] = {
+	{
+	 __INIT_CLK_DEBUG(ssi1_clk)
+	 .parent = &pll3_pfd2_508M,
+	 .enable_reg = MXC_CCM_CCGR5,
+	 .enable_shift = MXC_CCM_CCGRx_CG9_OFFSET,
+	 .enable = _clk_enable,
+	 .disable = _clk_disable,
+	 .set_parent = _clk_ssi1_set_parent,
+	 .set_rate = _clk_ssi1_set_rate,
+	 .round_rate = _clk_ssi_round_rate,
+	 .get_rate = _clk_ssi1_get_rate,
+	 .flags  = AHB_AUDIO_SET_POINT | CPU_FREQ_TRIG_UPDATE,
+#ifndef CONFIG_SND_MXC_SOC_IRAM
 	 .secondary = &mmdc_ch1_axi_clk[0],
+	},
+#else
+	 .secondary = &ssi1_clk[1],
+	},
+	{
+	 .parent = &mmdc_ch1_axi_clk[0],
+	 .secondary = &ocram_clk,
+	},
 #endif
-	.flags  = AHB_AUDIO_SET_POINT | CPU_FREQ_TRIG_UPDATE,
 };
 
 static unsigned long _clk_ssi2_get_rate(struct clk *clk)
@@ -2501,23 +2508,30 @@ static int _clk_ssi2_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-static struct clk ssi2_clk = {
-	__INIT_CLK_DEBUG(ssi2_clk)
-	.parent = &pll3_pfd2_508M,
-	.enable_reg = MXC_CCM_CCGR5,
-	.enable_shift = MXC_CCM_CCGRx_CG10_OFFSET,
-	.enable = _clk_enable,
-	.disable = _clk_disable,
-	.set_parent = _clk_ssi2_set_parent,
-	.set_rate = _clk_ssi2_set_rate,
-	.round_rate = _clk_ssi_round_rate,
-	.get_rate = _clk_ssi2_get_rate,
-#ifdef CONFIG_SND_MXC_SOC_IRAM
-	 .secondary = &ocram_clk,
-#else
+static struct clk ssi2_clk[] = {
+	{
+	 __INIT_CLK_DEBUG(ssi2_clk)
+	 .parent = &pll3_pfd2_508M,
+	 .enable_reg = MXC_CCM_CCGR5,
+	 .enable_shift = MXC_CCM_CCGRx_CG10_OFFSET,
+	 .enable = _clk_enable,
+	 .disable = _clk_disable,
+	 .set_parent = _clk_ssi2_set_parent,
+	 .set_rate = _clk_ssi2_set_rate,
+	 .round_rate = _clk_ssi_round_rate,
+	 .get_rate = _clk_ssi2_get_rate,
+	 .flags  = AHB_AUDIO_SET_POINT | CPU_FREQ_TRIG_UPDATE,
+#ifndef CONFIG_SND_MXC_SOC_IRAM
 	 .secondary = &mmdc_ch1_axi_clk[0],
+	},
+#else
+	 .secondary = &ssi2_clk[1],
+	},
+	{
+	 .parent = &mmdc_ch1_axi_clk[0],
+	 .secondary = &ocram_clk,
+	},
 #endif
-	.flags  = AHB_AUDIO_SET_POINT | CPU_FREQ_TRIG_UPDATE,
 };
 
 static unsigned long _clk_ssi3_get_rate(struct clk *clk)
@@ -2574,23 +2588,30 @@ static int _clk_ssi3_set_parent(struct clk *clk, struct clk *parent)
 	return 0;
 }
 
-static struct clk ssi3_clk = {
-	__INIT_CLK_DEBUG(ssi3_clk)
-	.parent = &pll3_pfd2_508M,
-	.enable_reg = MXC_CCM_CCGR5,
-	.enable_shift = MXC_CCM_CCGRx_CG11_OFFSET,
-	.enable = _clk_enable,
-	.disable = _clk_disable,
-	.set_parent = _clk_ssi3_set_parent,
-	.set_rate = _clk_ssi3_set_rate,
-	.round_rate = _clk_ssi_round_rate,
-	.get_rate = _clk_ssi3_get_rate,
-#ifdef CONFIG_SND_MXC_SOC_IRAM
-	 .secondary = &ocram_clk,
-#else
+static struct clk ssi3_clk[] = {
+	{
+	 __INIT_CLK_DEBUG(ssi3_clk)
+	 .parent = &pll3_pfd2_508M,
+	 .enable_reg = MXC_CCM_CCGR5,
+	 .enable_shift = MXC_CCM_CCGRx_CG11_OFFSET,
+	 .enable = _clk_enable,
+	 .disable = _clk_disable,
+	 .set_parent = _clk_ssi3_set_parent,
+	 .set_rate = _clk_ssi3_set_rate,
+	 .round_rate = _clk_ssi_round_rate,
+	 .get_rate = _clk_ssi3_get_rate,
+	 .flags  = AHB_AUDIO_SET_POINT | CPU_FREQ_TRIG_UPDATE,
+#ifndef CONFIG_SND_MXC_SOC_IRAM
 	 .secondary = &mmdc_ch1_axi_clk[0],
+	},
+#else
+	 .secondary = &ssi3_clk[1],
+	},
+	{
+	 .parent = &mmdc_ch1_axi_clk[0],
+	 .secondary = &ocram_clk,
+	},
 #endif
-	.flags  = AHB_AUDIO_SET_POINT | CPU_FREQ_TRIG_UPDATE,
 };
 
 static unsigned long _clk_epdc_lcdif_pix_round_rate(struct clk *clk,
@@ -3755,11 +3776,11 @@ static int _clk_clko2_set_parent(struct clk *clk, struct clk *parent)
 		sel = 14;
 	else if (parent == &usdhc2_clk)
 		sel = 17;
-	else if (parent == &ssi1_clk)
+	else if (parent == &ssi1_clk[0])
 		sel = 18;
-	else if (parent == &ssi2_clk)
+	else if (parent == &ssi2_clk[0])
 		sel = 19;
-	else if (parent == &ssi3_clk)
+	else if (parent == &ssi3_clk[0])
 		sel = 20;
 	else if (parent == &uart_clk[0])
 		sel = 28;
@@ -3912,9 +3933,9 @@ static struct clk_lookup lookups[] = {
 	_REGISTER_CLOCK("sdhci-esdhc-imx.1", NULL, usdhc2_clk),
 	_REGISTER_CLOCK("sdhci-esdhc-imx.2", NULL, usdhc3_clk),
 	_REGISTER_CLOCK("sdhci-esdhc-imx.3", NULL, usdhc4_clk),
-	_REGISTER_CLOCK("imx-ssi.0", NULL, ssi1_clk),
-	_REGISTER_CLOCK("imx-ssi.1", NULL, ssi2_clk),
-	_REGISTER_CLOCK("imx-ssi.2", NULL, ssi3_clk),
+	_REGISTER_CLOCK("imx-ssi.0", NULL, ssi1_clk[0]),
+	_REGISTER_CLOCK("imx-ssi.1", NULL, ssi2_clk[0]),
+	_REGISTER_CLOCK("imx-ssi.2", NULL, ssi3_clk[0]),
 	_REGISTER_CLOCK(NULL, "pxp_axi", pxp_axi_clk),
 	_REGISTER_CLOCK(NULL, "epdc_axi", epdc_axi_clk),
 	_REGISTER_CLOCK(NULL, "epdc_pix", epdc_pix_clk),
@@ -4003,11 +4024,14 @@ int __init mx6sl_clocks_init(unsigned long ckil, unsigned long osc,
 	 * should be from OSC24M */
 	clk_set_parent(&ipg_perclk, &osc_clk);
 
-	/* Need to set IPG_PERCLK to 3MHz, so that we can
-	  * satisfy the 2.5:1 AHB:IPG_PERCLK ratio. Since AHB
-	  * can be dropped to as low as 8MHz in low power mode.
+
+	/*IPG_PERCLK sources I2C.
+	  * I2C needs a minimum of 12.8MHz as its source
+	  * to acheive 400KHz speed.
+	  * Hence set ipg_perclk to 24MHz.
 	  */
-	clk_set_rate(&ipg_perclk, 3000000);
+
+	clk_set_rate(&ipg_perclk, 24000000);
 
 	gpt_clk[0].parent = &ipg_perclk;
 	gpt_clk[0].get_rate = NULL;

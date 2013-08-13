@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2012 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2011-2013 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,9 @@
 #include <mach/hardware.h>
 #ifdef CONFIG_CPU_FREQ_GOV_INTERACTIVE
 #include <linux/cpufreq.h>
+#endif
+#ifdef CONFIG_PCI_MSI
+#include "msi.h"
 #endif
 
 int mx6q_register_gpios(void);
@@ -103,9 +106,6 @@ void mx6_init_irq(void)
 	void __iomem *gpc_base = IO_ADDRESS(GPC_BASE_ADDR);
 	struct irq_desc *desc;
 	unsigned int i;
-#ifdef CONFIG_MX6_INTER_LDO_BYPASS
-	u32 reg;
-#endif
 
 	/* start offset if private timer irq id, which is 29.
 	 * ID table:
@@ -124,12 +124,6 @@ void mx6_init_irq(void)
 		__raw_writel(0x20000000, gpc_base + 0x10);
 	}
 
-#ifdef CONFIG_MX6_INTER_LDO_BYPASS
-	/* Mask the ANATOP brown out interrupt in the GPC. */
-	reg = __raw_readl(gpc_base + 0x14);
-	reg |= 0x80000000;
-	__raw_writel(reg, gpc_base + 0x14);
-#endif
 
 	for (i = MXC_INT_START; i <= MXC_INT_END; i++) {
 		desc = irq_to_desc(i);
@@ -139,5 +133,8 @@ void mx6_init_irq(void)
 #ifdef CONFIG_CPU_FREQ_GOV_INTERACTIVE
 	for (i = 0; i < ARRAY_SIZE(mxc_irq_tuner); i++)
 		cpufreq_gov_irq_tuner_register(mxc_irq_tuner[i]);
+#endif
+#ifdef CONFIG_PCI_MSI
+	imx_msi_init();
 #endif
 }

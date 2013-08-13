@@ -162,7 +162,7 @@ void mxc_cpu_lp_set(enum mxc_cpu_pwr_mode mode)
 		   * The PUPSCR should include the time it takes for the ARM LDO to
 		   * ramp up.
 		   */
-		__raw_writel(0x202, gpc_base + GPC_PGC_CPU_PUPSCR_OFFSET);
+		__raw_writel(0xf0f, gpc_base + GPC_PGC_CPU_PUPSCR_OFFSET);
 		/* The PDNSCR is a counter that counts in IPG_CLK cycles. This counter
 		  * can be set to minimum values to power down faster.
 		  */
@@ -195,6 +195,7 @@ void mxc_cpu_lp_set(enum mxc_cpu_pwr_mode mode)
 				}
 			} else {
 				if (stop_mode == 2) {
+#if 0
 					/* Disable VDDHIGH_IN to VDDSNVS_IN
 					  * power path, only used when VDDSNVS_IN
 					  * is powered by dedicated
@@ -204,6 +205,7 @@ void mxc_cpu_lp_set(enum mxc_cpu_pwr_mode mode)
 					anatop_val |= BM_ANADIG_ANA_MISC0_RTC_RINGOSC_EN;
 					__raw_writel(anatop_val, anatop_base +
 						HW_ANADIG_ANA_MISC0);
+#endif
 					/* Need to enable pull down if 2P5 is disabled */
 					anatop_val = __raw_readl(anatop_base +
 						HW_ANADIG_REG_2P5);
@@ -576,7 +578,7 @@ void mxc_clear_mfgmode(void)
 #endif
 
 #ifdef CONFIG_MXC_REBOOT_ANDROID_CMD
-/* This function will set a bit on SRC_GPR10[7-8] bits to enter
+/* This function will set a bit on SNVS_LPGPR[7-8] bits to enter
  * special boot mode.  These bits will not clear by watchdog reset, so
  * it can be checked by bootloader to choose enter different mode.*/
 
@@ -587,18 +589,18 @@ void do_switch_recovery(void)
 {
 	u32 reg;
 
-	reg = __raw_readl(SRC_BASE_ADDR + SRC_GPR10);
+	reg = __raw_readl(MX6Q_SNVS_BASE_ADDR + SNVS_LPGPR);
 	reg |= ANDROID_RECOVERY_BOOT;
-	__raw_writel(reg, SRC_BASE_ADDR + SRC_GPR10);
+	__raw_writel(reg, MX6Q_SNVS_BASE_ADDR + SNVS_LPGPR);
 }
 
 void do_switch_fastboot(void)
 {
 	u32 reg;
 
-	reg = __raw_readl(SRC_BASE_ADDR + SRC_GPR10);
+	reg = __raw_readl(MX6Q_SNVS_BASE_ADDR + SNVS_LPGPR);
 	reg |= ANDROID_FASTBOOT_BOOT;
-	__raw_writel(reg, SRC_BASE_ADDR + SRC_GPR10);
+	__raw_writel(reg, MX6Q_SNVS_BASE_ADDR + SNVS_LPGPR);
 }
 #endif
 

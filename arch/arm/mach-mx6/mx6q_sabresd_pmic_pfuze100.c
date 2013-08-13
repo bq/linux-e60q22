@@ -26,6 +26,7 @@
 #include <linux/mfd/pfuze.h>
 #include <linux/io.h>
 #include <mach/irqs.h>
+#include <mach/system.h>
 #include "crm_regs.h"
 #include "regs-anadig.h"
 #include "cpu_op-mx6.h"
@@ -41,36 +42,14 @@
 
 #define PFUZE100_I2C_DEVICE_NAME  "pfuze100"
 /* 7-bit I2C bus slave address */
-#define PFUZE100_I2C_ADDR         (0x08)
- /*SWBST*/
-#define PFUZE100_SW1AVOL	32
-#define PFUZE100_SW1AVOL_VSEL_M	(0x3f<<0)
-#define PFUZE100_SW1CVOL	46
-#define PFUZE100_SW1CVOL_VSEL_M	(0x3f<<0)
-#define PFUZE100_SW1ASTANDBY	33
-#define PFUZE100_SW1ASTANDBY_STBY_VAL	(0x19)
-#define PFUZE100_SW1ASTANDBY_STBY_M	(0x3f<<0)
-#define PFUZE100_SW1BSTANDBY   40
-#define PFUZE100_SW1BSTANDBY_STBY_VAL  (0x19)
-#define PFUZE100_SW1BSTANDBY_STBY_M    (0x3f<<0)
-#define PFUZE100_SW1CSTANDBY	47
-#define PFUZE100_SW1CSTANDBY_STBY_VAL	(0x19)
-#define PFUZE100_SW1CSTANDBY_STBY_M	(0x3f<<0)
-#define PFUZE100_SW2STANDBY     54
-#define PFUZE100_SW2STANDBY_STBY_VAL    0x0
-#define PFUZE100_SW2STANDBY_STBY_M      (0x3f<<0)
-#define PFUZE100_SW3ASTANDBY    61
-#define PFUZE100_SW3ASTANDBY_STBY_VAL   0x0
-#define PFUZE100_SW3ASTANDBY_STBY_M     (0x3f<<0)
-#define PFUZE100_SW3BSTANDBY    68
-#define PFUZE100_SW3BSTANDBY_STBY_VAL   0x0
-#define PFUZE100_SW3BSTANDBY_STBY_M     (0x3f<<0)
-#define PFUZE100_SW4STANDBY     75
-#define PFUZE100_SW4STANDBY_STBY_VAL    0
-#define PFUZE100_SW4STANDBY_STBY_M      (0x3f<<0)
-#define PFUZE100_SWBSTCON1	102
-#define PFUZE100_SWBSTCON1_SWBSTMOD_VAL	(0x1<<2)
-#define PFUZE100_SWBSTCON1_SWBSTMOD_M	(0x3<<2)
+#define PFUZE100_I2C_ADDR		(0x08)
+#define PFUZE100_DEVICEID		(0x0)
+#define PFUZE100_REVID			(0x3)
+#define PFUZE100_SW1AMODE		(0x23)
+#define PFUZE100_SW1AVOL       32
+#define PFUZE100_SW1AVOL_VSEL_M        (0x3f<<0)
+#define PFUZE100_SW1CVOL       46
+#define PFUZE100_SW1CVOL_VSEL_M        (0x3f<<0)
 #define PFUZE100_SW1ACON		36
 #define PFUZE100_SW1ACON_SPEED_VAL	(0x1<<6)	/*default */
 #define PFUZE100_SW1ACON_SPEED_M	(0x3<<6)
@@ -79,8 +58,8 @@
 #define PFUZE100_SW1CCON_SPEED_M	(0x3<<6)
 
 extern u32 arm_max_freq;
+extern u32 enable_ldo_mode;
 
-#ifdef CONFIG_MX6_INTER_LDO_BYPASS
 static struct regulator_consumer_supply sw1_consumers[] = {
 	{
 		.supply	   = "VDDCORE",
@@ -91,7 +70,6 @@ static struct regulator_consumer_supply sw1c_consumers[] = {
 		.supply	   = "VDDSOC",
 	},
 };
-#endif
 
 static struct regulator_consumer_supply sw2_consumers[] = {
 	{
@@ -166,12 +144,16 @@ static struct regulator_init_data sw1a_init = {
 			.valid_modes_mask = 0,
 			.boot_on = 1,
 			.always_on = 1,
+			.initial_state = PM_SUSPEND_MEM,
+			.state_mem = {
+				.uV = 975000,/*0.9V+6%*/
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
 			},
+	},
 
-#ifdef CONFIG_MX6_INTER_LDO_BYPASS
 	.num_consumer_supplies = ARRAY_SIZE(sw1_consumers),
 	.consumer_supplies = sw1_consumers,
-#endif
 };
 
 static struct regulator_init_data sw1b_init = {
@@ -195,11 +177,15 @@ static struct regulator_init_data sw1c_init = {
 			.valid_modes_mask = 0,
 			.always_on = 1,
 			.boot_on = 1,
+			.initial_state = PM_SUSPEND_MEM,
+			.state_mem = {
+				.uV = 975000,/*0.9V+6%*/
+				.mode = REGULATOR_MODE_NORMAL,
+				.enabled = 1,
 			},
-#ifdef CONFIG_MX6_INTER_LDO_BYPASS
+	},
 	.num_consumer_supplies = ARRAY_SIZE(sw1c_consumers),
 	.consumer_supplies = sw1c_consumers,
-#endif
 };
 
 static struct regulator_init_data sw2_init = {
@@ -399,51 +385,106 @@ static struct regulator_init_data vgen6_init = {
 
 static int pfuze100_init(struct mc_pfuze *pfuze)
 {
-	int ret;
-	unsigned int reg;
-	if (arm_max_freq == CPU_AT_1_2GHz) {
-		/*VDDARM_IN 1.475V*/
-		ret = pfuze_reg_rmw(pfuze, PFUZE100_SW1AVOL,
-					PFUZE100_SW1AVOL_VSEL_M,
-					0x2f);
-		if (ret)
-			goto err;
-		/*VDDSOC_IN 1.475V*/
-		ret = pfuze_reg_rmw(pfuze, PFUZE100_SW1CVOL,
-					PFUZE100_SW1CVOL_VSEL_M,
-					0x2f);
-		if (ret)
-			goto err;
-		/*set VDDSOC&VDDPU to 1.25V*/
-		reg = __raw_readl(ANADIG_REG_CORE);
-		reg &= ~BM_ANADIG_REG_CORE_REG2_TRG;
-		reg |= BF_ANADIG_REG_CORE_REG2_TRG(0x16);
-		reg &= ~BM_ANADIG_REG_CORE_REG1_TRG;
-		reg |= BF_ANADIG_REG_CORE_REG1_TRG(0x16);
-		__raw_writel(reg, ANADIG_REG_CORE);
+	int ret, i;
+	unsigned char value;
+	/*use default mode(ldo bypass) if no param from cmdline*/
+	if (enable_ldo_mode == LDO_MODE_DEFAULT)
+		enable_ldo_mode = LDO_MODE_BYPASSED;
+	/*read Device ID*/
+	ret = pfuze_reg_read(pfuze, PFUZE100_DEVICEID, &value);
+	if (ret)
+		goto err;
+	if (value != 0x10) {
+		printk(KERN_ERR "wrong device id:%x!\n", value);
+		goto err;
+	}
+
+	/*read Revision ID*/
+	ret = pfuze_reg_read(pfuze, PFUZE100_REVID, &value);
+	if (ret)
+		goto err;
+	if (value == 0x10) {
+		printk(KERN_WARNING "PF100 1.0 chip found!\n");
+	/* workaround ER1 of pfuze1.0: set all buck regulators in PWM mode
+	* except SW1C(APS) in normal and  PFM mode in standby.
+	*/
+		for (i = 0; i < 7; i++) {
+			if (i == 2)/*SW1C*/
+				value = 0xc;/*normal:APS mode;standby:PFM mode*/
+			else
+				value = 0xd;/*normal:PWM mode;standby:PFM mode*/
+			ret = pfuze_reg_write(pfuze,
+					PFUZE100_SW1AMODE + (i * 7),
+					value);
+			if (ret)
+				goto err;
+		}
+
+	} else {
+	/*set all switches APS in normal and PFM mode in standby*/
+		for (i = 0; i < 7; i++) {
+			value = 0xc;
+			ret = pfuze_reg_write(pfuze,
+					PFUZE100_SW1AMODE + (i * 7),
+					value);
+			if (ret)
+				goto err;
+		}
 
 	}
-	ret = pfuze_reg_rmw(pfuze, PFUZE100_SW1ASTANDBY,
-			    PFUZE100_SW1ASTANDBY_STBY_M,
-			    PFUZE100_SW1ASTANDBY_STBY_VAL);
-	if (ret)
-		goto err;
-	ret = pfuze_reg_rmw(pfuze, PFUZE100_SW1CSTANDBY,
-			    PFUZE100_SW1CSTANDBY_STBY_M,
-			    PFUZE100_SW1CSTANDBY_STBY_VAL);
-	if (ret)
-		goto err;
-	/*set SW1AB/1C DVSPEED as 25mV step each 4us,quick than 16us before.*/
-	ret = pfuze_reg_rmw(pfuze, PFUZE100_SW1ACON,
-			    PFUZE100_SW1ACON_SPEED_M,
-			    PFUZE100_SW1ACON_SPEED_VAL);
-	if (ret)
-		goto err;
-	ret = pfuze_reg_rmw(pfuze, PFUZE100_SW1CCON,
-			    PFUZE100_SW1CCON_SPEED_M,
-			    PFUZE100_SW1CCON_SPEED_VAL);
-	if (ret)
-		goto err;
+	/*use ldo active mode if use 1.2GHz,otherwise use ldo bypass mode*/
+	if (arm_max_freq == CPU_AT_1_2GHz) {
+			/*VDDARM_IN 1.425*/
+		ret = pfuze_reg_rmw(pfuze, PFUZE100_SW1AVOL,
+					PFUZE100_SW1AVOL_VSEL_M,
+					0x2d);
+		if (ret)
+			goto err;
+		/*VDDSOC_IN 1.425V*/
+		ret = pfuze_reg_rmw(pfuze, PFUZE100_SW1CVOL,
+					PFUZE100_SW1CVOL_VSEL_M,
+					0x2d);
+		if (ret)
+			goto err;
+		enable_ldo_mode = LDO_MODE_ENABLED;
+	} else if (enable_ldo_mode == LDO_MODE_BYPASSED) {
+		/*decrease VDDARM_IN/VDDSOC_IN,since we will use ldo bypass mode*/
+		/*VDDARM_IN 1.3V*/
+		ret = pfuze_reg_rmw(pfuze, PFUZE100_SW1AVOL,
+					PFUZE100_SW1AVOL_VSEL_M,
+					0x28);
+		if (ret)
+			goto err;
+		/*VDDSOC_IN 1.3V*/
+		ret = pfuze_reg_rmw(pfuze, PFUZE100_SW1CVOL,
+					PFUZE100_SW1CVOL_VSEL_M,
+					0x28);
+		if (ret)
+			goto err;
+		/*set SW1AB/1C DVSPEED as 25mV step each 4us,quick than 16us before.*/
+		ret = pfuze_reg_rmw(pfuze, PFUZE100_SW1ACON,
+				    PFUZE100_SW1ACON_SPEED_M,
+				    PFUZE100_SW1ACON_SPEED_VAL);
+		if (ret)
+			goto err;
+		ret = pfuze_reg_rmw(pfuze, PFUZE100_SW1CCON,
+				    PFUZE100_SW1CCON_SPEED_M,
+				    PFUZE100_SW1CCON_SPEED_VAL);
+		if (ret)
+			goto err;
+	} else if (enable_ldo_mode != LDO_MODE_BYPASSED) {
+		/*Increase VDDARM_IN/VDDSOC_IN to 1.375V in ldo active mode*/
+		ret = pfuze_reg_rmw(pfuze, PFUZE100_SW1AVOL,
+					PFUZE100_SW1AVOL_VSEL_M,
+					0x2b);
+		if (ret)
+			goto err;
+		ret = pfuze_reg_rmw(pfuze, PFUZE100_SW1CVOL,
+					PFUZE100_SW1CVOL_VSEL_M,
+					0x2b);
+		if (ret)
+			goto err;
+	}
 	return 0;
 err:
 	printk(KERN_ERR "pfuze100 init error!\n");

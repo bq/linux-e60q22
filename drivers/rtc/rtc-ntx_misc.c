@@ -67,13 +67,17 @@ static unsigned long rtc_read_second (void)
  *
  * @return  0 if successful; non-zero otherwise.
  */
-static int rtc_update_alarm(struct device *dev, struct rtc_time *alrm)
+static int rtc_update_alarm(struct device *dev, struct rtc_time *alrm, int isEnable)
 {
 	struct rtc_drv_data *pdata = dev_get_drvdata(dev);
 	struct rtc_time alarm_tm, now_tm;
 	unsigned long now, time;
 	int ret;
 	unsigned long flags;
+
+	if (!isEnable) {
+		return up_set_alarm (0);
+	}
 
 	up_get_time (&now_tm);
 
@@ -233,7 +237,7 @@ static int ntx_misc_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	}
 
 	if (alrm->enabled) {
-		ret = rtc_update_alarm(dev, &alrm->time);
+		ret = rtc_update_alarm(dev, &alrm->time, 1);
 		if (ret)
 			goto out;
 			
@@ -242,6 +246,12 @@ static int ntx_misc_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 				enable_irq(pdata->irq);
 			pdata->irq_enable = true;
 		}
+	}
+	else {
+		if (pdata->irq >= 0) 
+			disable_irq(pdata->irq);
+		pdata->irq_enable = false;
+		rtc_update_alarm(dev, &alrm->time, 0);
 	}
 
 out:
@@ -280,9 +290,9 @@ static int ntx_misc_rtc_alarm_irq_enable(struct device *dev, unsigned int enable
 			if (pdata->irq >= 0) 
 				disable_irq(pdata->irq);
 			pdata->irq_enable = false;
+			up_set_alarm (0);
 		}
 	}
-	printk ("[%s-%d] irq_enable %d ...",__func__,__LINE__,pdata->irq_enable);
 	return 0;
 }
 

@@ -329,10 +329,16 @@ mx6q_sabreauto_anatop_thermal_data __initconst = {
 	.name = "anatop_thermal",
 };
 
+static const struct imxuart_platform_data mx6_bt_uart_data __initconst = {
+	.flags = IMXUART_HAVE_RTSCTS | IMXUART_SDMA,
+	.dma_req_rx = MX6Q_DMA_REQ_UART3_RX,
+	.dma_req_tx = MX6Q_DMA_REQ_UART3_TX,
+};
+
 static inline void mx6q_sabreauto_init_uart(void)
 {
 	imx6q_add_imx_uart(1, NULL);
-	imx6q_add_imx_uart(2, NULL);
+	imx6q_add_imx_uart(2, &mx6_bt_uart_data);
 	imx6q_add_imx_uart(3, NULL);
 }
 
@@ -341,6 +347,17 @@ static int mx6q_sabreauto_fec_phy_init(struct phy_device *phydev)
 	unsigned short val;
 
 	if (!board_is_mx6_reva()) {
+		/* Ar8031 phy SmartEEE feature cause link status generates
+		 * glitch, which cause ethernet link down/up issue, so
+		 * disable SmartEEE
+		 */
+		phy_write(phydev, 0xd, 0x3);
+		phy_write(phydev, 0xe, 0x805d);
+		phy_write(phydev, 0xd, 0x4003);
+		val = phy_read(phydev, 0xe);
+		val &= ~(0x1 << 8);
+		phy_write(phydev, 0xe, val);
+
 		/* To enable AR8031 ouput a 125MHz clk from CLK_25M */
 		phy_write(phydev, 0xd, 0x7);
 		phy_write(phydev, 0xe, 0x8016);
@@ -404,7 +421,13 @@ static struct mtd_partition m25p32_partitions[] = {
 	{
 		.name	= "bootloader",
 		.offset	= 0,
-		.size	= 0x00100000,
+		.size	= SZ_256K,
+		.mask_flags = MTD_WRITEABLE,
+	}, {
+		.name	= "bootenv",
+		.offset = MTDPART_OFS_APPEND,
+		.size	= SZ_8K,
+		.mask_flags = MTD_WRITEABLE,
 	}, {
 		.name	= "kernel",
 		.offset	= MTDPART_OFS_APPEND,
@@ -426,7 +449,7 @@ static struct spi_board_info m25p32_spi0_board_info[] __initdata = {
 		.modalias	= "m25p80",
 		.max_speed_hz	= 20000000,
 		.bus_num	= 0,
-		.chip_select	= 0,
+		.chip_select	= 1,
 		.platform_data	= &m25p32_spi_flash_data,
 	},
 #endif
@@ -544,6 +567,9 @@ static int max7310_u39_setup(struct i2c_client *client,
 	};
 
 	int n;
+
+	if (uart3_en)
+		max7310_gpio_value[4] = 1;
 
 	 for (n = 0; n < ARRAY_SIZE(max7310_gpio_value); ++n) {
 		gpio_request(gpio_base + n, "MAX7310 U39 GPIO Expander");
@@ -799,11 +825,22 @@ static int mx6q_sabreauto_sata_init(struct device *dev, void __iomem *addr)
 	tmpdata = clk_get_rate(clk) / 1000;
 	clk_put(clk);
 
+#ifdef CONFIG_SATA_AHCI_PLATFORM
 	ret = sata_init(addr, tmpdata);
 	if (ret == 0)
 		return ret;
+#else
+	usleep_range(1000, 2000);
+	/* AHCI PHY enter into PDDQ mode if the AHCI module is not enabled */
+	tmpdata = readl(addr + PORT_PHY_CTL);
+	writel(tmpdata | PORT_PHY_CTL_PDDQ_LOC, addr + PORT_PHY_CTL);
+	pr_info("No AHCI save PWR: PDDQ %s\n", ((readl(addr + PORT_PHY_CTL)
+					>> 20) & 1) ? "enabled" : "disabled");
+#endif
 
 release_sata_clk:
+	/* disable SATA_PHY PLL */
+	writel((readl(IOMUXC_GPR13) & ~0x2), IOMUXC_GPR13);
 	clk_disable(sata_clk);
 put_sata_clk:
 	clk_put(sata_clk);
@@ -811,6 +848,7 @@ put_sata_clk:
 	return ret;
 }
 
+#ifdef CONFIG_SATA_AHCI_PLATFORM
 static void mx6q_sabreauto_sata_exit(struct device *dev)
 {
 	clk_disable(sata_clk);
@@ -822,6 +860,7 @@ static struct ahci_platform_data mx6q_sabreauto_sata_data = {
 	.init = mx6q_sabreauto_sata_init,
 	.exit = mx6q_sabreauto_sata_exit,
 };
+#endif
 
 static struct imx_asrc_platform_data imx_asrc_data = {
 	.channel_bits	= 4,
@@ -1237,9 +1276,8 @@ static struct mxc_mlb_platform_data mx6_sabreauto_mlb150_data = {
 };
 
 static struct mxc_dvfs_platform_data sabreauto_dvfscore_data = {
-	.reg_id			= "cpu_vddgp",
-	.soc_id			= "cpu_vddsoc",
-	.pu_id			= "cpu_vddvpu",
+	.reg_id			= "VDDCORE",
+	.soc_id			= "VDDSOC",
 	.clk1_id		= "cpu_clk",
 	.clk2_id 		= "gpc_dvfs_clk",
 	.gpc_cntr_offset 	= MXC_GPC_CNTR_OFFSET,
@@ -1331,6 +1369,7 @@ static void __init mx6_board_init(void)
 	iomux_v3_cfg_t *tuner_pads = NULL;
 	iomux_v3_cfg_t *spinor_pads = NULL;
 	iomux_v3_cfg_t *weimnor_pads = NULL;
+	iomux_v3_cfg_t *bluetooth_pads = NULL;
 	iomux_v3_cfg_t *extra_pads = NULL;
 
 	int common_pads_cnt;
@@ -1341,6 +1380,7 @@ static void __init mx6_board_init(void)
 	int tuner_pads_cnt;
 	int spinor_pads_cnt;
 	int weimnor_pads_cnt;
+	int bluetooth_pads_cnt;
 	int extra_pads_cnt;
 
 	if (cpu_is_mx6q()) {
@@ -1351,6 +1391,7 @@ static void __init mx6_board_init(void)
 		tuner_pads = mx6q_tuner_pads;
 		spinor_pads = mx6q_spinor_pads;
 		weimnor_pads = mx6q_weimnor_pads;
+		bluetooth_pads = mx6q_bluetooth_pads;
 
 		common_pads_cnt = ARRAY_SIZE(mx6q_sabreauto_pads);
 		can0_pads_cnt = ARRAY_SIZE(mx6q_sabreauto_can0_pads);
@@ -1359,6 +1400,7 @@ static void __init mx6_board_init(void)
 		tuner_pads_cnt = ARRAY_SIZE(mx6q_tuner_pads);
 		spinor_pads_cnt = ARRAY_SIZE(mx6q_spinor_pads);
 		weimnor_pads_cnt = ARRAY_SIZE(mx6q_weimnor_pads);
+		bluetooth_pads_cnt = ARRAY_SIZE(mx6q_bluetooth_pads);
 		if (board_is_mx6_reva()) {
 			i2c3_pads = mx6q_i2c3_pads_rev_a;
 			i2c3_pads_cnt = ARRAY_SIZE(mx6q_i2c3_pads_rev_a);
@@ -1380,6 +1422,7 @@ static void __init mx6_board_init(void)
 		tuner_pads = mx6dl_tuner_pads;
 		spinor_pads = mx6dl_spinor_pads;
 		weimnor_pads = mx6dl_weimnor_pads;
+		bluetooth_pads = mx6dl_bluetooth_pads;
 
 		common_pads_cnt = ARRAY_SIZE(mx6dl_sabreauto_pads);
 		can0_pads_cnt = ARRAY_SIZE(mx6dl_sabreauto_can0_pads);
@@ -1388,6 +1431,7 @@ static void __init mx6_board_init(void)
 		tuner_pads_cnt = ARRAY_SIZE(mx6dl_tuner_pads);
 		spinor_pads_cnt = ARRAY_SIZE(mx6dl_spinor_pads);
 		weimnor_pads_cnt = ARRAY_SIZE(mx6dl_weimnor_pads);
+		bluetooth_pads_cnt = ARRAY_SIZE(mx6dl_bluetooth_pads);
 
 		if (board_is_mx6_reva()) {
 			i2c3_pads = mx6dl_i2c3_pads_rev_a;
@@ -1421,6 +1465,11 @@ static void __init mx6_board_init(void)
 			BUG_ON(!i2c3_pads);
 			mxc_iomux_v3_setup_multiple_pads(i2c3_pads,
 					i2c3_pads_cnt);
+		}
+		if (uart3_en) {
+			BUG_ON(!bluetooth_pads);
+			mxc_iomux_v3_setup_multiple_pads(bluetooth_pads,
+					bluetooth_pads_cnt);
 		}
 	}
 
@@ -1474,7 +1523,6 @@ static void __init mx6_board_init(void)
 
 	gp_reg_id = sabreauto_dvfscore_data.reg_id;
 	soc_reg_id = sabreauto_dvfscore_data.soc_id;
-	pu_reg_id = sabreauto_dvfscore_data.pu_id;
 	mx6q_sabreauto_init_uart();
 	imx6q_add_mipi_csi2(&mipi_csi2_pdata);
 	if (cpu_is_mx6dl()) {
@@ -1547,12 +1595,17 @@ static void __init mx6_board_init(void)
 
 	imx_add_viv_gpu(&imx6_gpu_data, &imx6q_gpu_pdata);
 	imx6q_sabreauto_init_usb();
-	if (cpu_is_mx6q())
+	if (cpu_is_mx6q()) {
+#ifdef CONFIG_SATA_AHCI_PLATFORM
 		imx6q_add_ahci(0, &mx6q_sabreauto_sata_data);
+#else
+		mx6q_sabreauto_sata_init(NULL,
+			(void __iomem *)ioremap(MX6Q_SATA_BASE_ADDR, SZ_4K));
+#endif
+	}
 	imx6q_add_vpu();
 	imx6q_init_audio();
 	platform_device_register(&sabreauto_vmmc_reg_devices);
-	mx6_cpu_regulator_init();
 	imx_asrc_data.asrc_core_clk = clk_get(NULL, "asrc_clk");
 	imx_asrc_data.asrc_audio_clk = clk_get(NULL, "asrc_serial_clk");
 	imx6q_add_asrc(&imx_asrc_data);

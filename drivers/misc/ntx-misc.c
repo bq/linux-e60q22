@@ -46,6 +46,7 @@ struct ntx_misc_platform_data *ntx_misc;
 
 struct i2c_client *g_up_i2c_client;
 extern int g_wakeup_by_alarm;
+static struct ntx_up_dev_info *gNtxUpDevInfo;
 
 int up_read_reg(unsigned char reg)
 {
@@ -121,12 +122,14 @@ int up_set_alarm(struct rtc_time *tm)
 	struct rtc_time now_tm;
 	unsigned long now, time;
 
-	up_get_time (&now_tm);
-	rtc_tm_to_time(&now_tm, &now);
-	rtc_tm_to_time(tm, &time);
-	gAlarmTime=time;
+	if (tm) {
+		up_get_time (&now_tm);
+		rtc_tm_to_time(&now_tm, &now);
+		rtc_tm_to_time(tm, &time);
+		gAlarmTime=time;
+	}
 
-	if(time > now) {
+	if(tm && time > now) {
 		int interval = time-now;
 		printk ("[%s-%d] alarm %d\n",__func__,__LINE__,interval);
 		up_write_reg (0x1B, (interval&0xFF00));
@@ -211,7 +214,7 @@ EXPORT_SYMBOL(set_pmic_dc_charger_state);
 #define TICS_TO_CHK_ACIN_AFTER_BOOT		500
 static unsigned long gdwTheTickToChkACINPlug;
 //static struct timer_list acin_pg_timer;
-static void acin_pg_chk(void);
+static void acin_pg_chk(struct work_struct *work);
 //static DEFINE_TIMER(acin_pg_timer,acin_pg_chk,0,0);
 static int g_acin_pg_debounce;
 typedef void (*usb_insert_handler) (char inserted);
@@ -249,50 +252,36 @@ static void ac_in_int_function(int irq)
 	return ;
 }
 
-static void acin_pg_chk(void)
+static void acin_pg_chk(struct work_struct *work)
 {
 	int i;
 
 	//del_timer_sync(&acin_pg_timer);
 	cancel_delayed_work(&work_acin_pg);
 
-	if (!gpio_get_value (MX6SL_NTX_ACIN_PG)) {
-		++g_acin_pg_debounce;
-		//if (10 == g_acin_pg_debounce) 
-		if (1 == g_acin_pg_debounce) 
-		{
-			if (gIsCustomerUi) {
-				if(mxc_misc_report_usb) {
-					mxc_misc_report_usb(1);
-					//ntx_charger_online_event_callback ();
-				}
-				else {
-					printk(KERN_ERR"%s(%d): mxc_misc_report_usb=0,skip %s()\n",__FILE__,__LINE__,__FUNCTION__);
-				}
-			}
-		}
-		//mod_timer(&acin_pg_timer, jiffies + 1);
-		schedule_delayed_work(&work_acin_pg,10);
-	}
-	else {
-		//if (gLastBatValue)
-		//	gLastBatValue += 50;
-
+	++g_acin_pg_debounce;
+	if (1 == g_acin_pg_debounce) 
+	{
 		if (gIsCustomerUi) {
 			if(mxc_misc_report_usb) {
-				mxc_misc_report_usb(0);
+				mxc_misc_report_usb(gpio_get_value (MX6SL_NTX_ACIN_PG)?0:1);
 				//ntx_charger_online_event_callback ();
 			}
 			else {
 				printk(KERN_ERR"%s(%d): mxc_misc_report_usb=0,skip %s()\n",__FILE__,__LINE__,__FUNCTION__);
 			}
 		}
+		cancel_delayed_work(&gNtxUpDevInfo->work);
+		schedule_delayed_work(&gNtxUpDevInfo->work,20);
+	}
+	else {
+		schedule_delayed_work(&work_acin_pg,10);
 	}
 }
 
 static void acin_pg_work_func(struct work_struct *work)
 {
-	acin_pg_chk();
+	acin_pg_chk(work);
 }
 
 
@@ -453,14 +442,15 @@ static irqreturn_t ntx_misc_dcin(int irq, void *_data)
 	DBG_MSG("%s():irq=%d\n",__FUNCTION__,irq);	
 
 	gUSB_Change_Tick = jiffies;	// do not check battery value in 6 seconds
-	power_supply_changed(&data->charger);
-	power_supply_changed(&data->bat);
 
 	ac_in_int_function(irq);
 	return IRQ_HANDLED;
 }
 
-
+static irqreturn_t ntx_misc_chg(int irq, void *_data)
+{
+	return IRQ_HANDLED;
+}
 
 static int pmic_battery_remove(struct platform_device *pdev)
 {
@@ -502,7 +492,7 @@ static int pmic_battery_probe(struct platform_device *pdev)
 		retval = -ENOMEM;
 		goto di_alloc_failed;
 	}
-
+	gNtxUpDevInfo = di;
 	platform_set_drvdata(pdev, di);
 
 	INIT_DELAYED_WORK(&di->work, pmic_battery_work);
@@ -545,7 +535,7 @@ static int pmic_battery_probe(struct platform_device *pdev)
 
 	irq=gpio_to_irq(ntx_misc->chg_gpio);
 	retval = request_threaded_irq(irq,
-			ntx_misc_dcin, NULL, IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,
+			ntx_misc_chg, NULL, IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,
 			"NTX_MISC CHG", di);
 	if (retval) {
 		dev_err(di->dev, "Cannot request irq %d for CHG (%d)\n",
