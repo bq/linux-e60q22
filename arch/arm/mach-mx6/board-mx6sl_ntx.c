@@ -1688,7 +1688,7 @@ static struct platform_device ntx_gpio_key_device = {
 
 
 static int mx6sl_ntx_keymap[] = {
-	KEY(0, 0, 90),
+//	KEY(0, 0, 90),
 	KEY(0, 1, KEY_POWER),
 	KEY(0, 2, KEY_H),
 	KEY(0, 3, KEY_F1),
