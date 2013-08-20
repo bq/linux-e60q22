@@ -579,7 +579,7 @@ static int  ioctlDriver(struct file *filp, unsigned int command, unsigned long a
 			break;
 		case CM_nLED:
 			//printk("CM_nLED %d\n",p);
-			if (p)
+			if (!p)
 				gpio_direction_output (gMX6SL_ON_LED,0);
 			else
 				gpio_direction_input (gMX6SL_ON_LED);
@@ -1381,14 +1381,14 @@ void ntx_gpio_resume (void)
 	g_power_key_pressed = power_key_status();	// POWER key
 	if (g_power_key_pressed) 
 		mod_timer(&power_key_timer, jiffies + 1);
-
+/*
 	if (LED_conitnuous)
    		wake_up_interruptible(&LED_freeze_WaitQueue);
    	else {
 		ntx_led_blink (3, red_led_period);
 		ntx_led_blink (4, green_led_period);
 		ntx_led_blink (5, blue_led_period);
-	}
+	}*/
 }
 
 /*void ntx_gpio_touch_reset (void)
