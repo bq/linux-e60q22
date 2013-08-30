@@ -346,6 +346,9 @@ static int ntx_up_battery_vol (void)
 		 767,  791,  812,  833,  852,  877,  903,  928,  950,  979,  993, 1019, 1023,
 	};
 	
+	if (NTX_ACIN_PG && !(NTX_IS_CHARGING))
+		return 4200000;
+	
 	battValue = msp430_battery ();
 	// transfer to uV to pmic interface.
 	for (i=0; i< sizeof (battGasgauge); i++) {                 
