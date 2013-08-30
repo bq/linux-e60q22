@@ -118,6 +118,7 @@
 #define CM_GET_KEYS				107
 
 
+
 #ifdef GPIOFN_PWRKEY//[
 static void power_key_chk(unsigned long v);
 
@@ -1326,17 +1327,20 @@ void ntx_gpio_suspend (void)
 		gpio_direction_output (IMX_GPIO_NR(3, 14), 0);
 		gpio_direction_output (IMX_GPIO_NR(3, 15), 0);
 	
-		// turn off ir touch power.
-		gpio_direction_output (gMX6SL_IR_TOUCH_INT, 0);
-		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__GPIO_3_12);
-		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SDA__GPIO_3_13);
-		gpio_request(IMX_GPIO_NR(3, 12), "i2c1_scl");
-		gpio_request(IMX_GPIO_NR(3, 13), "i2c1_sda");
-		gpio_direction_output (IMX_GPIO_NR(3, 12), 0);
-		gpio_direction_output (IMX_GPIO_NR(3, 13), 0);
+		if(0x03!=gptHWCFG->m_val.bUIConfig) {
+			// turn off ir touch power.
+			gpio_direction_output (gMX6SL_IR_TOUCH_INT, 0);
+			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__GPIO_3_12);
+			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SDA__GPIO_3_13);
+			gpio_request(IMX_GPIO_NR(3, 12), "i2c1_scl");
+			gpio_request(IMX_GPIO_NR(3, 13), "i2c1_sda");
+			gpio_direction_output (IMX_GPIO_NR(3, 12), 0);
+			gpio_direction_output (IMX_GPIO_NR(3, 13), 0);
 
-		gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
-		gpio_direction_output (GPIO_IR_3V3_ON, 0);
+		
+			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
+			gpio_direction_output (GPIO_IR_3V3_ON, 0);
+		}
 	}
 	gUart_ucr1 = __raw_readl(ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
 	__raw_writel(0, ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
@@ -1347,15 +1351,22 @@ void ntx_gpio_resume (void)
 {
 	__raw_writel(gUart_ucr1, ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
 	if (gSleep_Mode_Suspend) {
-		// turn on ir touch power.
-		gpio_direction_output (GPIO_IR_3V3_ON, 1);
-		gpio_free(IMX_GPIO_NR(3, 12));
-		gpio_free(IMX_GPIO_NR(3, 13));
-		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__I2C1_SCL);
-		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SDA__I2C1_SDA);
-		gpio_direction_input (gMX6SL_IR_TOUCH_INT);
-		mdelay (20);
-		gpio_direction_output (gMX6SL_IR_TOUCH_RST, 1);
+		if(0x03!=gptHWCFG->m_val.bUIConfig) {
+			// turn on ir touch power.
+			gpio_direction_output (GPIO_IR_3V3_ON, 1);
+			gpio_free(IMX_GPIO_NR(3, 12));
+			gpio_free(IMX_GPIO_NR(3, 13));
+			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__I2C1_SCL);
+			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SDA__I2C1_SDA);
+			gpio_direction_input (gMX6SL_IR_TOUCH_INT);
+			mdelay (20);
+			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 1);
+		}
+		else { // reset ir touch
+			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
+			mdelay (20);
+			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 1);
+		}
 	
 		gpio_free(IMX_GPIO_NR(3, 14));
 		gpio_free(IMX_GPIO_NR(3, 15));

@@ -409,6 +409,7 @@ static int zForce_ir_touch_suspend(struct platform_device *pdev, pm_message_t st
 		}else{
 			i2c_master_send(zForce_ir_touch_data.client, cmd_Deactive, sizeof(cmd_Deactive));
 		}	
+		msleep (200);
 		// 20130603 disable_irq cannot mask interrupt immediately. Use free_irq instead. 
 //		disable_irq(zForce_ir_touch_data.client->irq);
 		free_irq(zForce_ir_touch_data.client->irq, ZFORCE_TS_NAME);

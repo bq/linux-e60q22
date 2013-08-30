@@ -178,7 +178,6 @@ static void usbotg_uninit_ext(struct platform_device *pdev)
 {
 	otg_used--;
 	if (!otg_used) {
-		clk_disable(usb_phy1_clk);
 		clk_put(usb_phy1_clk);
 		clk_put(usb_oh3_clk);
 	}

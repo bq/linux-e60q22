@@ -42,8 +42,10 @@ extern int check_hardware_name(void);
 extern volatile NTX_HWCONFIG *gptHWCFG;
 
 static int giLastTemprature = DEFAULT_TEMP;
+static volatile unsigned long gdwLastUpdateJiffies = 0;
 static int giIsInited = 0;
 DECLARE_COMPLETION(mxc_epdc_fake13522_inited);
+
 
 static char gcFB_snapshot_pathA[512+2];
 
@@ -86,6 +88,7 @@ static DEVICE_ATTR(waveform_mode_reagl, 0666, waveform_mode_read, waveform_mode_
 static DEVICE_ATTR(waveform_mode_reagld, 0666, waveform_mode_read, waveform_mode_write);
 static DEVICE_ATTR(waveform_mode_a2, 0666, waveform_mode_read, waveform_mode_write);
 static DEVICE_ATTR(fbsnapshot_path, 0666, fbsnapshot_path_read, fbsnapshot_path_write);
+
 
 
 static ssize_t fbsnapshot_path_read(struct device *dev, struct device_attribute *attr,char *buf)
@@ -137,49 +140,57 @@ static ssize_t temperature_read(struct device *dev, struct device_attribute *att
 static ssize_t temperature_write(struct device *dev, struct device_attribute *attr,
 		       const char *buf, size_t count)
 {
-	giLastTemprature = simple_strtol(buf,NULL,0);
-	DBG_MSG("%s(),temp <== %d\n",__FUNCTION__,giLastTemprature);
+	int iChk,iLastTemprature;
+
+	iLastTemprature = simple_strtol(buf,NULL,0);
+	iChk = mxc_epdc_fb_set_temperature(iLastTemprature,&g_fb_data->info);
+	if(0==iChk) {
+		DBG_MSG("%s(),temp <== %d\n",__FUNCTION__,iLastTemprature);
+		giLastTemprature = iLastTemprature;
+		gdwLastUpdateJiffies = jiffies+(60*HZ);
+	}
+	else {
+		ERR_MSG("%s(),temp <== %d fail!\n",__FUNCTION__,iLastTemprature);
+	}
+
 	return count;
 }
 
 static ssize_t waveform_mode_read(struct device *dev, struct device_attribute *attr,char *buf)
 {
-	int iWaveform_mode;
+	int iWaveform_mode,iWaveform_mode_eink;
 
 	if(attr==&dev_attr_waveform_mode_du.attr) {
-		//iWaveform_mode = giNTX_waveform_modeA[NTX_WFM_MODE_DU];
+		iWaveform_mode_eink = giNTX_waveform_modeA[NTX_WFM_MODE_DU];
 		iWaveform_mode = NTX_WFM_MODE_DU;
 	}
 	else 
 	if(attr==&dev_attr_waveform_mode_a2.attr) {
-		//iWaveform_mode = giNTX_waveform_modeA[NTX_WFM_MODE_A2];
+		iWaveform_mode_eink = giNTX_waveform_modeA[NTX_WFM_MODE_A2];
 		iWaveform_mode = NTX_WFM_MODE_A2;
 	}
 	else 
 	if(attr==&dev_attr_waveform_mode_gc16.attr) {
-		//iWaveform_mode = giNTX_waveform_modeA[NTX_WFM_MODE_GC16];
+		iWaveform_mode_eink = giNTX_waveform_modeA[NTX_WFM_MODE_GC16];
 		iWaveform_mode = NTX_WFM_MODE_GC16;
 	}
 	else 
 	if(attr==&dev_attr_waveform_mode_gl16.attr) {
-		//iWaveform_mode = giNTX_waveform_modeA[NTX_WFM_MODE_GL16];
+		iWaveform_mode_eink = giNTX_waveform_modeA[NTX_WFM_MODE_GL16];
 		iWaveform_mode = NTX_WFM_MODE_GL16;
 	}
 	else 
 	if(attr==&dev_attr_waveform_mode_reagl.attr) {
-		//iWaveform_mode = giNTX_waveform_modeA[NTX_WFM_MODE_GLR16];
+		iWaveform_mode_eink = giNTX_waveform_modeA[NTX_WFM_MODE_GLR16];
 		iWaveform_mode = NTX_WFM_MODE_GLR16;
 	}
 	else 
 	if(attr==&dev_attr_waveform_mode_reagld.attr) {
-		//iWaveform_mode = giNTX_waveform_modeA[NTX_WFM_MODE_GLD16];
+		iWaveform_mode_eink = giNTX_waveform_modeA[NTX_WFM_MODE_GLD16];
 		iWaveform_mode = NTX_WFM_MODE_GLD16;
 	}
-	else {
-		iWaveform_mode = NTX_WFM_MODE_GC16;
-	}
 
-	sprintf (buf,"%d\n",iWaveform_mode);
+	sprintf (buf,"%d:%d\n",iWaveform_mode,iWaveform_mode_eink);
 	return strlen(buf);
 }
 
@@ -494,7 +505,6 @@ static int k_wait_update_complete(void)
 	return iRet;
 }
 
-static volatile unsigned long gdwLastUpdateJiffies = 0;
 
 
 /////////////////////////////////////////////////////////////
