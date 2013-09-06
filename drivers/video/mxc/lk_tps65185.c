@@ -1884,6 +1884,9 @@ int tps65185_suspend(void)
 
 	flush_workqueue(tps65185_pwrgood_workqueue);
 	flush_workqueue(tps65185_int_workqueue);
+
+
+
 	
 	//tps65185_wait_panel_poweroff();
 
@@ -1891,24 +1894,35 @@ int tps65185_suspend(void)
 	//TPS65185_REG_SET(INT_EN1,ALL,bVal);
 	//TPS65185_REG_SET(INT_EN2,ALL,bVal);
 	//TPS65185_REG_SET(ENABLE,ALL,bVal);
+#ifdef TPS65185_PWR_ONOFF_INT//[
+
+	irq = gpio_to_irq(GPIO_TPS65185_INT);
+	#ifdef TPS65185_PLATFORM_MX6//[
+	free_irq(irq,0);
+	#else //][!TPS65185_PLATFORM_MX6
+	disable_irq(irq);
+	#endif //] TPS65185_PLATFORM_MX6
+
+
+	irq = gpio_to_irq(GPIO_TPS65185_PWRGOOD);
+	#ifdef TPS65185_PLATFORM_MX6//[
+	free_irq(irq,0);
+	#else //][!TPS65185_PLATFORM_MX6
+	disable_irq(irq);
+	#endif //] TPS65185_PLATFORM_MX6
+
+#endif //] TPS65185_PWR_ONOFF_INT
+
 
 	dwTPS65185_mode = TPS65185_MODE_SLEEP;
 	tps65185_chg_mode(&dwTPS65185_mode,1);
 	if(delayed_work_pending(&gtPwrdwn_work_param.pwrdwn_work)) {
 		DBG_MSG("pmic pwrdwn delay work pending !!\n");
 		//flush_delayed_work(&gtPwrdwn_work_param.pwrdwn_work);
+		tps65185_resume();
 		return -1;
-		//tps65185_resume();
 	}
 
-	irq = gpio_to_irq(GPIO_TPS65185_INT);
-	free_irq(irq,0);
-	//disable_irq(irq);
-#ifdef TPS65185_PWR_ONOFF_INT//[
-	irq = gpio_to_irq(GPIO_TPS65185_PWRGOOD);
-	free_irq(irq,0);
-	//disable_irq(irq);
-#endif //] TPS65185_PWR_ONOFF_INT
 
 #if 0
 	if(gSleep_Mode_Suspend) {
@@ -1926,7 +1940,6 @@ void tps65185_resume(void)
 {
 #ifdef TPS65185_SUSPEND //[
 	unsigned long dwTPS65185_mode;
-	int irq,iChk;
 
 	dbgENTER();
 	
@@ -1941,21 +1954,29 @@ void tps65185_resume(void)
 	dwTPS65185_mode = TPS65185_MODE_STANDBY;
 	tps65185_chg_mode(&dwTPS65185_mode,1);
 
-	irq = gpio_to_irq(GPIO_TPS65185_INT);
-//	enable_irq(irq);
-	iChk = request_irq(irq, tps65185_int, 0, "tps65185_INT", 0);
-	if (iChk) {
-		pr_info("register TPS65185 interrupt failed\n");
-	}
 #ifdef TPS65185_PWR_ONOFF_INT//[
 	{
+		int irq,iChk;
+		irq = gpio_to_irq(GPIO_TPS65185_INT);
+		#ifdef TPS65185_PLATFORM_MX6//[
+		iChk = request_irq(irq, tps65185_int, 0, "tps65185_INT", 0);
+		if (iChk) {
+			pr_info("register TPS65185 interrupt failed\n");
+		}
+		#else //][!TPS65185_PLATFORM_MX6
+		enable_irq(irq);
+		#endif //] TPS65185_PLATFORM_MX6
+
 
 		irq = gpio_to_irq(GPIO_TPS65185_PWRGOOD);
-		//enable_irq(irq);
+		#ifdef TPS65185_PLATFORM_MX6//[
 		iChk = request_irq(irq, tps65185_pwrgood_inthandler, 0, "tps65185_PWRGOOD", 0);
 		if (iChk) {
 			pr_info("register TPS65185 pwrgood interrupt failed\n");
 		}
+		#else //][!TPS65185_PLATFORM_MX6
+		enable_irq(irq);
+		#endif //] TPS65185_PLATFORM_MX6
 	}
 #endif //]TPS65185_PWR_ONOFF_INT
 

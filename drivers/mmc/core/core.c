@@ -71,6 +71,9 @@ MODULE_PARM_DESC(
 static int mmc_schedule_delayed_work(struct delayed_work *work,
 				     unsigned long delay)
 {
+	if(cancel_delayed_work(work)==0) {
+		flush_workqueue(workqueue);
+	}
 	return queue_delayed_work(workqueue, work, delay);
 }
 

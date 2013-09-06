@@ -665,6 +665,22 @@ static int  __init mx6_usb_dr_init(void)
 	dr_wakeup_config.usb_pdata[i] = pdev[i]->dev.platform_data;
 	i++;
 #endif
+#ifdef CONFIG_USB_GADGET_ARC
+	dr_utmi_config.operating_mode = DR_UDC_MODE;
+	dr_utmi_config.wake_up_enable = _device_wakeup_enable;
+	dr_utmi_config.platform_rh_suspend = NULL;
+	dr_utmi_config.platform_rh_resume  = NULL;
+	dr_utmi_config.platform_set_disconnect_det = NULL;
+	dr_utmi_config.phy_lowpower_suspend = _device_phy_lowpower_suspend;
+	dr_utmi_config.is_wakeup_event = _is_device_wakeup;
+	dr_utmi_config.wakeup_pdata = &dr_wakeup_config;
+	dr_utmi_config.wakeup_handler = device_wakeup_handler;
+	dr_utmi_config.charger_base_addr = anatop_base_addr;
+	dr_utmi_config.platform_phy_power_on = dr_platform_phy_power_on;
+	pdev[i] = imx6q_add_fsl_usb2_udc(&dr_utmi_config);
+	dr_wakeup_config.usb_pdata[i] = pdev[i]->dev.platform_data;
+	i++;
+#endif
 #ifdef CONFIG_USB_EHCI_ARC_OTG
 	dr_utmi_config.operating_mode = DR_HOST_MODE;
 	dr_utmi_config.wake_up_enable = _host_wakeup_enable;
@@ -682,22 +698,6 @@ static int  __init mx6_usb_dr_init(void)
 	dr_utmi_config.wakeup_handler = host_wakeup_handler;
 	dr_utmi_config.platform_phy_power_on = dr_platform_phy_power_on;
 	pdev[i] = imx6q_add_fsl_ehci_otg(&dr_utmi_config);
-	dr_wakeup_config.usb_pdata[i] = pdev[i]->dev.platform_data;
-	i++;
-#endif
-#ifdef CONFIG_USB_GADGET_ARC
-	dr_utmi_config.operating_mode = DR_UDC_MODE;
-	dr_utmi_config.wake_up_enable = _device_wakeup_enable;
-	dr_utmi_config.platform_rh_suspend = NULL;
-	dr_utmi_config.platform_rh_resume  = NULL;
-	dr_utmi_config.platform_set_disconnect_det = NULL;
-	dr_utmi_config.phy_lowpower_suspend = _device_phy_lowpower_suspend;
-	dr_utmi_config.is_wakeup_event = _is_device_wakeup;
-	dr_utmi_config.wakeup_pdata = &dr_wakeup_config;
-	dr_utmi_config.wakeup_handler = device_wakeup_handler;
-	dr_utmi_config.charger_base_addr = anatop_base_addr;
-	dr_utmi_config.platform_phy_power_on = dr_platform_phy_power_on;
-	pdev[i] = imx6q_add_fsl_usb2_udc(&dr_utmi_config);
 	dr_wakeup_config.usb_pdata[i] = pdev[i]->dev.platform_data;
 	i++;
 #endif

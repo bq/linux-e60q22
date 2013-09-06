@@ -1522,6 +1522,46 @@ static int sdhci_get_ro(struct mmc_host *mmc)
 	return 0;
 }
 
+static int check_cd(struct sdhci_host *host)
+{
+    unsigned long flags;
+    int is_present;
+
+    sdhci_enable_clk(host);
+    spin_lock_irqsave(&host->lock, flags);
+
+	if(sdhci_readl(host, SDHCI_PRESENT_STATE) & SDHCI_CARD_PRESENT)
+		is_present = 1;
+	else
+		is_present = 0;
+
+    spin_unlock_irqrestore(&host->lock, flags);
+	sdhci_disable_clk(host, CLK_TIMEOUT);
+
+    return is_present;
+}
+
+static int sdhci_get_cd(struct mmc_host *mmc)
+{
+	struct sdhci_host *host;
+	int i, cd_count;
+
+	host = mmc_priv(mmc);
+
+	if(!(host->quirks & SDHCI_QUIRK_BROKEN_CARD_DETECTION))
+		return check_cd(host);
+
+	cd_count = 0;
+	for(i=0; i<SAMPLE_COUNT; i++) {
+		if(check_cd(host)) {
+			if(++cd_count > SAMPLE_COUNT/2 )
+				return 1;
+		}
+		msleep(10);
+	}
+	return 0;
+}
+
 static void sdhci_enable_sdio_irq(struct mmc_host *mmc, int enable)
 {
 	struct sdhci_host *host;
@@ -1938,6 +1978,7 @@ static const struct mmc_host_ops sdhci_ops = {
 	.pre_req	= sdhci_pre_req,
 	.set_ios	= sdhci_set_ios,
 	.get_ro		= sdhci_get_ro,
+	.get_cd		= sdhci_get_cd,
 	.enable_sdio_irq = sdhci_enable_sdio_irq,
 	.start_signal_voltage_switch	= sdhci_start_signal_voltage_switch,
 	.execute_tuning			= sdhci_execute_tuning,
