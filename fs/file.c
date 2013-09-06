@@ -165,6 +165,9 @@ static struct fdtable * alloc_fdtable(unsigned int nr)
 	if (unlikely(nr > sysctl_nr_open))
 		nr = ((sysctl_nr_open - 1) | (BITS_PER_LONG - 1)) + 1;
 
+#if 1
+	BUG_ON(nr & (BITS_PER_LONG - 1)); // not multiple of 32
+#endif
 	fdt = kmalloc(sizeof(struct fdtable), GFP_KERNEL);
 	if (!fdt)
 		goto out;
@@ -210,6 +213,7 @@ static int expand_fdtable(struct files_struct *files, int nr)
 	spin_lock(&files->file_lock);
 	if (!new_fdt)
 		return -ENOMEM;
+
 	/*
 	 * extremely unlikely race - sysctl_nr_open decreased between the check in
 	 * caller and alloc_fdtable().  Cheaper to catch it here...
@@ -315,6 +319,7 @@ struct files_struct *dup_fd(struct files_struct *oldf, int *errorp)
 	old_fdt = files_fdtable(oldf);
 	open_files = count_open_files(old_fdt);
 
+	BUG_ON(open_files > old_fdt->max_fds);
 	/*
 	 * Check whether we need to allocate a larger fd array and fd set.
 	 */
@@ -350,13 +355,32 @@ struct files_struct *dup_fd(struct files_struct *oldf, int *errorp)
 	old_fds = old_fdt->fd;
 	new_fds = new_fdt->fd;
 
+    if (new_fdt->max_fds > open_files) {
+        int left = new_fdt->max_fds/8;
+
+        memset(&(new_fdt->open_fds->fds_bits[0]), 0, left);
+        memset(&(new_fdt->close_on_exec->fds_bits[0]), 0, left);
+    }
+
 	memcpy(new_fdt->open_fds->fds_bits,
 		old_fdt->open_fds->fds_bits, open_files/8);
 	memcpy(new_fdt->close_on_exec->fds_bits,
 		old_fdt->close_on_exec->fds_bits, open_files/8);
 
-	for (i = open_files; i != 0; i--) {
-		struct file *f = *old_fds++;
+	for (i = 0; i <open_files; i++) {
+		struct file *f;
+
+		if(((unsigned int)old_fds)&0x03) {
+//			printk(KERN_ERR "%s %d:old_fds=%08x, *old_fds=%08x, i=%d, open_files=%d\n", __FILE__, __LINE__, (unsigned int)old_fds, ((unsigned int)(*old_fds)), i, open_files);
+		}
+		else if(((unsigned int)(*old_fds))&0x03) {
+//			printk(KERN_ERR "%s %d:old_fds=%08x, *old_fds=%08x, i=%d, open_files=%d\n", __FILE__, __LINE__, (unsigned int)old_fds, ((unsigned int)(*old_fds)), i, open_files);
+			if(!FD_ISSET(i, old_fdt->open_fds->fds_bits)) {
+				rcu_assign_pointer(*old_fds, NULL);
+//				printk(KERN_ERR "dup_fd:err fds_bits is 0 but fd is not NULL!\n");
+			}
+		}
+		f = *(old_fds++);
 		if (f) {
 			get_file(f);
 		} else {
@@ -366,9 +390,9 @@ struct files_struct *dup_fd(struct files_struct *oldf, int *errorp)
 			 * is partway through open().  So make sure that this
 			 * fd is available to the new process.
 			 */
-			FD_CLR(open_files - i, new_fdt->open_fds);
+			FD_CLR(i, new_fdt->open_fds);
 		}
-		rcu_assign_pointer(*new_fds++, f);
+		rcu_assign_pointer(*(new_fds++), f);
 	}
 	spin_unlock(&oldf->file_lock);
 
@@ -377,14 +401,6 @@ struct files_struct *dup_fd(struct files_struct *oldf, int *errorp)
 
 	/* This is long word aligned thus could use a optimized version */
 	memset(new_fds, 0, size);
-
-	if (new_fdt->max_fds > open_files) {
-		int left = (new_fdt->max_fds-open_files)/8;
-		int start = open_files / (8 * sizeof(unsigned long));
-
-		memset(&new_fdt->open_fds->fds_bits[start], 0, left);
-		memset(&new_fdt->close_on_exec->fds_bits[start], 0, left);
-	}
 
 	rcu_assign_pointer(newf->fdt, new_fdt);
 

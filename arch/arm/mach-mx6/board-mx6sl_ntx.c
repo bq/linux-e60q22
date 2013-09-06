@@ -82,6 +82,9 @@
 #include "ntx_hwconfig.h"
 
 
+#include <linux/mmc/sdhci.h>
+
+
 #define GDEBUG 0
 #include <linux/gallen_dbg.h>
 
@@ -1717,15 +1720,35 @@ void ntx_register_wifi_cd (irq_handler_t handler, void *data)
 	g_cd_irq = handler;
 }
 
-void ntx_wifi_power_ctrl (int isWifiEnable)
+static DEFINE_MUTEX(ntx_wifi_power_mutex);
+static int gi_wifi_power_status = -1;
+
+int _ntx_get_wifi_power_status(void)
+{
+	int iWifiPowerStatus;
+
+	mutex_lock(&ntx_wifi_power_mutex);
+	iWifiPowerStatus = gi_wifi_power_status;
+	mutex_unlock(&ntx_wifi_power_mutex);
+
+	return iWifiPowerStatus;
+}
+
+int _ntx_wifi_power_ctrl (int isWifiEnable)
 {
 	int iHWID;
+	int iOldStatus;
 
+	mutex_lock(&ntx_wifi_power_mutex);
+	iOldStatus = gi_wifi_power_status;
 	printk("Wifi / BT power control %d\n", isWifiEnable);
 	if(isWifiEnable == 0){
 		gpio_direction_output (gMX6SL_WIFI_RST, 0);
 		gpio_direction_input (gMX6SL_WIFI_3V3);	// turn off Wifi_3V3_on
 
+		msleep(10);
+// DO NOT switch pin functions to GPIO
+/*
 		// sdio port disable ...
 		if(33==gptHWCFG->m_val.bPCB) {
 			//E60Q2X .
@@ -1758,14 +1781,14 @@ void ntx_wifi_power_ctrl (int isWifiEnable)
 			gpio_direction_input (MX6SL_SD2_DAT2);
 			gpio_direction_input (MX6SL_SD2_DAT3);
 		}
+*/
 
 #ifdef _WIFI_ALWAYS_ON_
 		disable_irq_wake(gpio_to_irq(gMX6SL_WIFI_INT));
 #endif
+		gi_wifi_power_status=0;
 	}
 	else {
-		gpio_direction_output (gMX6SL_WIFI_3V3, 0);	// turn on Wifi_3V3_on
-		schedule_timeout(HZ/50);
 
 
 		// sdio port process ...
@@ -1788,24 +1811,80 @@ void ntx_wifi_power_ctrl (int isWifiEnable)
 			gpio_free (MX6SL_SD2_DAT3);
 			mxc_iomux_v3_setup_multiple_pads(mx6sl_ntx_sd2_wifi_pads, ARRAY_SIZE(mx6sl_ntx_sd2_wifi_pads));
 		}
+		msleep(10);
+
+		gpio_direction_output (gMX6SL_WIFI_3V3, 0);	// turn on Wifi_3V3_on
+		//schedule_timeout(HZ/50);
+		msleep(20);
 
 		gpio_direction_input (gMX6SL_WIFI_INT);
 		gpio_direction_output (gMX6SL_WIFI_RST, 1);	// turn on wifi_RST
+		//schedule_timeout(HZ/10);
+		msleep(100);
 #ifdef _WIFI_ALWAYS_ON_
 		enable_irq_wake(gpio_to_irq(gMX6SL_WIFI_INT));
 #endif
-		schedule_timeout(HZ/10);
+		gi_wifi_power_status=1;
 	}
 
 	if (g_cd_irq) {
-		g_cd_irq (0, g_wifi_sd_host);
-		schedule_timeout (100);
+		struct sdhci_host *host;
+
+		host = (struct sdhci_host *) g_wifi_sd_host;
+		//g_cd_irq (0, g_wifi_sd_host);
+		//schedule_timeout (100);
+		//msleep(1000);
+		mmc_detect_change(host->mmc, msecs_to_jiffies(500));
+		msleep(600);
 	}
 	else {
 		printk ("[%s-%d] not registered.\n",__func__,__LINE__);
 	}
+
+	if(isWifiEnable == 0){ // switch PIN function to GPIO
+		// sdio port disable ...
+		if(33==gptHWCFG->m_val.bPCB) {
+			//E60Q2X .
+			mxc_iomux_v3_setup_multiple_pads(mx6sl_ntx_sd3_gpio_pads, ARRAY_SIZE(mx6sl_ntx_sd3_gpio_pads));
+			gpio_request (MX6SL_SD3_CLK	, "MX6SL_SD3_CLK" );
+			gpio_request (MX6SL_SD3_CMD	, "MX6SL_SD3_CMD" );
+			gpio_request (MX6SL_SD3_DAT0, "MX6SL_SD3_DAT0");
+			gpio_request (MX6SL_SD3_DAT1, "MX6SL_SD3_DAT1");
+			gpio_request (MX6SL_SD3_DAT2, "MX6SL_SD3_DAT2");
+			gpio_request (MX6SL_SD3_DAT3, "MX6SL_SD3_DAT3");
+			gpio_direction_output (MX6SL_SD3_CLK , 0);
+			gpio_direction_output (MX6SL_SD3_CMD , 0);
+			gpio_direction_output (MX6SL_SD3_DAT0, 0);
+			gpio_direction_output (MX6SL_SD3_DAT1, 0);
+			gpio_direction_output (MX6SL_SD3_DAT2, 0);
+			gpio_direction_output (MX6SL_SD3_DAT3, 0);
+		}
+		else {
+			mxc_iomux_v3_setup_multiple_pads(mx6sl_ntx_sd2_gpio_pads, ARRAY_SIZE(mx6sl_ntx_sd2_gpio_pads));
+			gpio_request (MX6SL_SD2_CLK	, "MX6SL_SD2_CLK" );
+			gpio_request (MX6SL_SD2_CMD	, "MX6SL_SD2_CMD" );
+			gpio_request (MX6SL_SD2_DAT0, "MX6SL_SD2_DAT0");
+			gpio_request (MX6SL_SD2_DAT1, "MX6SL_SD2_DAT1");
+			gpio_request (MX6SL_SD2_DAT2, "MX6SL_SD2_DAT2");
+			gpio_request (MX6SL_SD2_DAT3, "MX6SL_SD2_DAT3");
+			gpio_direction_input (MX6SL_SD2_CLK );
+			gpio_direction_input (MX6SL_SD2_CMD );
+			gpio_direction_input (MX6SL_SD2_DAT0);
+			gpio_direction_input (MX6SL_SD2_DAT1);
+			gpio_direction_input (MX6SL_SD2_DAT2);
+			gpio_direction_input (MX6SL_SD2_DAT3);
+		}
+	}
 	printk("%s() end.\n",__FUNCTION__);
+	mutex_unlock(&ntx_wifi_power_mutex);
+	return iOldStatus;
 }
+
+void ntx_wifi_power_ctrl(int iIsWifiEnable)
+{
+	_ntx_wifi_power_ctrl(iIsWifiEnable);
+}
+
 EXPORT_SYMBOL(ntx_wifi_power_ctrl);
 
 static iomux_v3_cfg_t mx6sl_ntx_suspend_pads[] = {
