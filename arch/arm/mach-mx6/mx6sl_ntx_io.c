@@ -581,6 +581,7 @@ static int  ioctlDriver(struct file *filp, unsigned int command, unsigned long a
 		case CM_AUDIO_PWR:
 			break;
 		case CM_nLED:
+printk("%s, CM_nLED %d\n", __func__, p);
 			//printk("CM_nLED %d\n",p);
 			if (!p)
 				gpio_direction_output (gMX6SL_ON_LED,0);
@@ -640,6 +641,7 @@ static int  ioctlDriver(struct file *filp, unsigned int command, unsigned long a
 			break;
 			
 		case CM_LED_BLINK:
+printk("%s: CM_LED_BLINK %d\n", __func__, p);
 		    if (2==p) {
 				spin_lock(&led_flash_lock);
 		    	LED_Flash_Count++;
