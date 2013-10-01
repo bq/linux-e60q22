@@ -583,9 +583,10 @@ static int  ioctlDriver(struct file *filp, unsigned int command, unsigned long a
 		case CM_nLED:
 printk("%s, CM_nLED %d\n", __func__, p);
 			//printk("CM_nLED %d\n",p);
-			if (!p)
+			if (!p) {
+				g_Cus_Ctrl_Led = 1;
 				gpio_direction_output (gMX6SL_ON_LED,0);
-			else
+			} else
 				gpio_direction_input (gMX6SL_ON_LED);
 			break;			
 			
