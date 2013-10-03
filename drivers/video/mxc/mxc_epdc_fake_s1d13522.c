@@ -4,6 +4,7 @@
 
 #include "fake_s1d13522.h"
 #include "lk_tps65185.h"
+#include "lk_fp9928.h"
 #include <linux/completion.h>
 
 
@@ -50,6 +51,7 @@ DECLARE_COMPLETION(mxc_epdc_fake13522_inited);
 static char gcFB_snapshot_pathA[512+2];
 
 
+static void epdc_powerup(struct mxc_epdc_fb_data *fb_data);
 
 
 //
@@ -522,17 +524,22 @@ static int k_set_temperature(struct fb_info *info)
 	
 	if(0==gdwLastUpdateJiffies||time_after(jiffies,gdwLastUpdateJiffies)) {
 		
+
 		gdwLastUpdateJiffies = jiffies+(60*HZ);
 
-#ifdef LM75_ENABLED//[
-		if(gptHWCFG&&(6==gptHWCFG->m_val.bDisplayCtrl||7==gptHWCFG->m_val.bDisplayCtrl)) {
-#endif //]LM75_ENABLED
-
+		ASSERT(gptHWCFG);
+		
+		if(8==gptHWCFG->m_val.bDisplayCtrl) {
+			iChk = fp9928_get_temperature(&giLastTemprature);
+		}
+		else
+		if(6==gptHWCFG->m_val.bDisplayCtrl||7==gptHWCFG->m_val.bDisplayCtrl) 
+		{
 			// imx508 + tps16585 .
 			iChk = tps65185_get_temperature(&giLastTemprature);
+		}
 
 #ifdef LM75_ENABLED//[
-		}
 		else {
 			iChk = lm75_get_temperature(0,&giLastTemprature);
 		}
@@ -574,8 +581,13 @@ static int k_set_update_rect(unsigned short wX,unsigned short wY,
 static int k_set_vcom(int iVCOM_set_mV)
 {
 	int iRet=0;
+	ASSERT(gptHWCFG);
 	//printk("%s(%d):%s\n",__FILE__,__LINE__,__FUNCTION__);
-	if(gptHWCFG&&(6==gptHWCFG->m_val.bDisplayCtrl||7==gptHWCFG->m_val.bDisplayCtrl)) {
+	if(8==gptHWCFG->m_val.bDisplayCtrl) {
+		iRet = fp9928_vcom_set(iVCOM_set_mV,0);
+	}
+	else
+	if(6==gptHWCFG->m_val.bDisplayCtrl||7==gptHWCFG->m_val.bDisplayCtrl) {
 		iRet = tps65185_vcom_set(iVCOM_set_mV,0);
 	}
 	else {
@@ -587,6 +599,10 @@ static int k_set_vcom_to_flash(int iVCOM_set_mV)
 {
 	int iRet=0;
 	//printk("%s(%d):%s\n",__FILE__,__LINE__,__FUNCTION__);
+	if(8==gptHWCFG->m_val.bDisplayCtrl) {
+		iRet = fp9928_vcom_set(iVCOM_set_mV,1);
+	}
+	else
 	if(gptHWCFG&&(6==gptHWCFG->m_val.bDisplayCtrl||7==gptHWCFG->m_val.bDisplayCtrl)) {
 		iRet = tps65185_vcom_set(iVCOM_set_mV,1);
 	}
@@ -599,6 +615,10 @@ static int k_get_vcom(int *O_piVCOM_get_mV)
 {
 	int iRet=0;
 	//printk("%s(%d):%s\n",__FILE__,__LINE__,__FUNCTION__);
+	if(8==gptHWCFG->m_val.bDisplayCtrl) {
+		iRet = fp9928_vcom_get(O_piVCOM_get_mV);
+	}
+	else
 	if(gptHWCFG&&(6==gptHWCFG->m_val.bDisplayCtrl||7==gptHWCFG->m_val.bDisplayCtrl)) {
 		iRet = tps65185_vcom_get(O_piVCOM_get_mV);
 	}
@@ -625,6 +645,9 @@ static int k_fake_s1d13522_init(unsigned char *pbInitDCbuf)
 {
 
 	int iChk;
+
+
+	//printk("\n%s() DisplayCtrl=%d\n\n",__FUNCTION__,(int)gptHWCFG->m_val.bDisplayCtrl);
 
 	gptDC = fake_s1d13522_initEx3(default_bpp,g_fb_data->info.screen_base,\
 			g_fb_data->info.var.xres,g_fb_data->info.var.yres, \
@@ -668,7 +691,11 @@ static int k_fake_s1d13522_init(unsigned char *pbInitDCbuf)
 		// printk("%s(%d):%s,Display=%s\n",__FILE__,__LINE__,__FUNCTION__,
 		//	NtxHwCfg_GetCfgFldStrVal(gptHWCFG,HWCFG_FLDIDX_DisplayCtrl));
 #ifdef LM75_ENABLED//[
-		if(gptHWCFG&&(6==gptHWCFG->m_val.bDisplayCtrl||7==gptHWCFG->m_val.bDisplayCtrl)) {
+		if(gptHWCFG&&\
+				(6==gptHWCFG->m_val.bDisplayCtrl||\
+				 7==gptHWCFG->m_val.bDisplayCtrl||\
+				 8==gptHWCFG->m_val.bDisplayCtrl)) 
+		{
 #endif //]LM75_ENABLED
 			int iPortA[2]={-1,-1} ;
 			int i;
@@ -695,7 +722,17 @@ static int k_fake_s1d13522_init(unsigned char *pbInitDCbuf)
 			for(i=0;i<2;i++) {
 				if(iPortA[i]>0) {
 					//printk("%s(),init TPS65185 @ i2c%d\n",__FUNCTION__,iPortA[i]);
-					iChk = tps65185_init(iPortA[i],EPDTIMING_V110);
+					if(8==gptHWCFG->m_val.bDisplayCtrl) {
+						iChk = fp9928_init(iPortA[i]);
+						if(iChk>=0&&0!=glVCOM_uV) {
+							if(fp9928_vcom_set((int)(glVCOM_uV/1000),0)<0) {
+								WARNING_MSG("%s(),FP9928 vcom set fail !\n",__FUNCTION__);
+							}
+						}
+					}
+					else {
+						iChk = tps65185_init(iPortA[i],EPDTIMING_V110);
+					}
 					if(iChk>=0) {
 						break;
 					}

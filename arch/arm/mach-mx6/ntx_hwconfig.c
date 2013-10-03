@@ -85,7 +85,7 @@
 
 
 const char gszNtxHwCfgMagic[]="HW CONFIG ";// hw config tool magic .
-const char gszNtxHwCfgVersion[]="v1.7"; // hw config tool version .
+const char gszNtxHwCfgVersion[]="v1.8"; // hw config tool version .
 
 
 // field values table ...
@@ -121,7 +121,7 @@ const char * gszTouchCtrlA[]={"No","TSC2004","Wacom Digitizer","Watop Digitizer"
 const char * gszTouchTypeA[]={"No","R-Type","Digitizer","C-Type","IR-Type"};//
 const char * gszDisplayCtrlA[]={
 	"S1D13521","S1D13522","K1900","M166E","MX508", //0~4
-	"K1901","MX508+TPS65185","MX6SL+TPS65185", // 5~9
+	"K1901","MX508+TPS65185","MX6SL+TPS65185","MX6SL+FP9928", // 5~9
 };
 const char * gszDisplayPanelA[]={
 	"6\" Left EPD","6\" Right EPD","9\" Right EPD","5\" Left EPD","5\" Right EPD",//0~4
@@ -180,9 +180,9 @@ const char * gszSysPartTypeA[]={"TYPE1","TYPE2","TYPE3","TYPE4","TYPE5","TYPE6",
 const char * gszCPUA[]={"mx35","m166e","mx50","x86","mx6","mx6sl"}; // platform CPU .
 const char * gszUIStyleA[]={"Ebrmain","Customer UI","Android"};// UI Style .
 const char * gszRAMTypeA[]={"MDDR","DDR2","K4X2G323PC","K4X2G323PD","DDR3","LPDDR2"};// Ram Type .
-const char * gszUIConfigA[]={"Normal","Normal2","AD"};// UI Config .
+const char * gszUIConfigA[]={"Normal","Normal2","AD","RD"};// UI Config .
 const char * gszDisplayResolutionA[]={"800x600","1024x758","1024x768","1440x1080"};// Display resolution .
-const char * gszFrontLightA[]={"No","TABLE0","TABLE0+","TABLE0a","TABLE1+","TABLE2+","TABLE3+","TABLE4+","TABLE5+"};// Front Light .
+const char * gszFrontLightA[]={"No","TABLE0","TABLE0+","TABLE0a","TABLE1+","TABLE2+","TABLE3+","TABLE4+","TABLE5+","TABLE6+"};// Front Light .
  /*
   * TABLE0 : FrontLight Table0, double table and seperated by HW gpio .
   * TABLE0+ : FrontLight Table0, double table and seperated by HW gpio ,with shadow improvement .
@@ -195,7 +195,8 @@ const char * gszFrontLightA[]={"No","TABLE0","TABLE0+","TABLE0a","TABLE1+","TABL
 	* 	double table and seperated by HW gpio , LED driver=SY7201 , shadow improvement . 
 	* TABLE4+ : FrontLight Table4 (more dark++ at lower level), for E606C2B4 . 
 	* 	double table and seperated by HW gpio , LED driver=SY7201 , shadow improvement . 
-	* TABLE5+ : FrontLight Table5 , for test . 
+	* TABLE5+ : FrontLight Table5 ,(for old E606F2B,E606F2A,E60Q22) . 
+	* TABLE6+ : FrontLight Table6 ,(for new E606F2B23,brightness from 3 to 120 nits,shadow improvement) .
 	* . 
   */
 
@@ -207,7 +208,7 @@ const char * gszFrontLight_FlagsA[]={"BootON","TABLE1X"};//FrontLight Flags
  * BootON : trun on the frontlight when booting .
  * TABLE1X : ON=FrontLight table only single segment ; OFF=FrontLight table two segment seperated by gpio .
  */ 
-const char * gszPCB_FlagsA[]={"NO_KeyMatrix","FPC_Touch","LOGO_LED"};//PCB Flags
+const char * gszPCB_FlagsA[]={"NO_KeyMatrix","FPC_Touch","LOGO_LED","RD_MODE"};//PCB Flags
 /*
  * NO_KeyMatrix : ON=PCB has no key matrix design .
  * FPC_Touch : ON=FPC touch design .
@@ -291,6 +292,9 @@ static HwConfigField gtHwConfigFields[] = {
 		(char **)gszPCB_FlagsA,FIELD_TYPE_FLAGS,FIELD_FLAGS_HW},
 	{"v1.7","FrontLight_LEDrv",sizeof(gszFrontLightLEDrvA)/sizeof(gszFrontLightLEDrvA[0]),
 		(char **)gszFrontLightLEDrvA,FIELD_TYPE_IDXSTR,FIELD_FLAGS_HW},
+	{"v1.8","VCOM_10mV_HiByte",0,0,FIELD_TYPE_BYTE,FIELD_FLAGS_SW},
+	{"v1.8","VCOM_10mV_LoByte",0,0,FIELD_TYPE_BYTE,FIELD_FLAGS_SW},
+
 };
 
 

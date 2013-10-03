@@ -249,7 +249,7 @@ static iomux_v3_cfg_t mx6sl_brd_pads[] = {
 	/* LCD brightness */
 	MX6SL_PAD_PWM1__PWM1_PWMO,
 	/* LCD power on */
-	MX6SL_PAD_KEY_ROW5__GPIO_4_3,
+	//MX6SL_PAD_KEY_ROW5__GPIO_4_3,
 
 	/* keypad on E-Ink add-on board */
 	MX6SL_PAD_KEY_COL0__KPP_COL_0,
@@ -303,10 +303,10 @@ static iomux_v3_cfg_t mx6sl_brd_epdc_enable_pads[] = {
 //	MX6SL_PAD_EPDC_SDCE2__EPDC_SDCE_2,
 
 	/* EPD PMIC (Maxim 17135) pins */
-	MX6SL_PAD_EPDC_VCOM0__GPIO_2_3,
+//	MX6SL_PAD_EPDC_VCOM0__GPIO_2_3,
 //	MX6SL_PAD_EPDC_PWRSTAT__GPIO_2_13,
-	MX6SL_PAD_EPDC_PWRCTRL0__GPIO_2_7,
-	MX6SL_PAD_EPDC_PWRWAKEUP__GPIO_2_14,
+//	MX6SL_PAD_EPDC_PWRCTRL0__GPIO_2_7,
+//	MX6SL_PAD_EPDC_PWRWAKEUP__GPIO_2_14,
 };
 
 static iomux_v3_cfg_t mx6sl_brd_epdc_disable_pads[] = {
@@ -342,10 +342,10 @@ static iomux_v3_cfg_t mx6sl_brd_epdc_disable_pads[] = {
 //	MX6SL_PAD_EPDC_SDCE2__GPIO_1_29,
 
 	/* EPD PMIC (Maxim 17135) pins */
-	MX6SL_PAD_EPDC_VCOM0__GPIO_2_3,
+//	MX6SL_PAD_EPDC_VCOM0__GPIO_2_3,
 //	MX6SL_PAD_EPDC_PWRSTAT__GPIO_2_13,
-	MX6SL_PAD_EPDC_PWRCTRL0__GPIO_2_7,
-	MX6SL_PAD_EPDC_PWRWAKEUP__GPIO_2_14,
+//	MX6SL_PAD_EPDC_PWRCTRL0__GPIO_2_7,
+//	MX6SL_PAD_EPDC_PWRWAKEUP__GPIO_2_14,
 };
 
 static iomux_v3_cfg_t mx6sl_brd_spdc_enable_pads[] = {

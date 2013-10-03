@@ -22,6 +22,8 @@ extern volatile unsigned char *gpbWF_vaddr;
 extern volatile unsigned char *gpbWF_paddr;
 extern volatile unsigned long gdwWF_size;
 
+extern volatile long glVCOM_uV;
+
 
 EPDFB_DC *fake_s1d13522_init(void);
 EPDFB_DC *fake_s1d13522_initEx(unsigned char bBitsPerPixel,unsigned char *pbDCBuf);
@@ -49,6 +51,7 @@ int fake_s1d13522_setcolreg(unsigned regno, unsigned red, unsigned green,
                                 unsigned blue, unsigned transp, struct fb_info *info);
 
 
+int fake_s1d13522_write_file_ex2(char *filename, char *data,unsigned long dwDataSize,unsigned long dwSeekSize);
 
 
 #endif //]fake_s1d13522_h

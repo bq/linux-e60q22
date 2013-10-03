@@ -1364,7 +1364,7 @@ void ntx_gpio_suspend (void)
 
 	if (gSleep_Mode_Suspend) {
 		tps65185_ONOFF(0);
-		gpio_direction_output (GPIO_EP_3V3_ON, 0);
+		//gpio_direction_output (GPIO_EP_3V3_ON, 0);
 		//gpio_direction_output (MX6SL_EP_PWRALL, 0);
 		
 		
@@ -1421,8 +1421,8 @@ void ntx_gpio_resume (void)
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SCL__I2C2_SCL);
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SDA__I2C2_SDA);
 	
-		gpio_direction_output (GPIO_EP_3V3_ON, 1);
-		mdelay (5);
+		//gpio_direction_output (GPIO_EP_3V3_ON, 1);
+		//mdelay (5);
 		tps65185_ONOFF(1);
 		//gpio_direction_output (MX6SL_EP_PWRALL, 1);
 	}

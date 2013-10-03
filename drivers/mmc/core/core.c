@@ -71,12 +71,9 @@ MODULE_PARM_DESC(
 static int mmc_schedule_delayed_work(struct delayed_work *work,
 				     unsigned long delay)
 {
-	/* only call this when not in an atomic context */
-	if (!in_atomic_preempt_off()) {
-		if (cancel_delayed_work(work) == 0)
-			flush_workqueue(workqueue);
-	}
-
+//	if(cancel_delayed_work(work)==0) {
+//		flush_workqueue(workqueue);
+//	}
 	return queue_delayed_work(workqueue, work, delay);
 }
 

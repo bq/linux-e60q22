@@ -56,6 +56,7 @@
 #include "epdc_regs.h"
 
 #include "lk_tps65185.h"
+#include "lk_fp9928.h"
 
 //#define USE_BSP_PMIC 1
 
@@ -1182,6 +1183,8 @@ static void epdc_init_settings(struct mxc_epdc_fb_data *fb_data)
 	clk_disable(fb_data->epdc_clk_pix);
 }
 
+#include "mxc_epdc_fake_s1d13522.c"
+
 static void epdc_powerup(struct mxc_epdc_fb_data *fb_data)
 {
 	int ret = 0;
@@ -1222,7 +1225,15 @@ static void epdc_powerup(struct mxc_epdc_fb_data *fb_data)
 
 	msleep(1);
 #else //][!USE_BSP_PMIC
-
+	if(8==gptHWCFG->m_val.bDisplayCtrl) {
+		int iChk;
+		iChk = fp9928_output_power(1,0);
+		if(iChk<0) {
+			printk(KERN_ERR "%s(%d):[warning] output power from FP9928 fail ,errno=%d !\n",
+				__FILE__,__LINE__,iChk);
+		}
+	}
+	else 
 	{
 		int iChk;
 		unsigned long dwTPS65185_mode = TPS65185_MODE_ACTIVE;
@@ -1235,6 +1246,8 @@ static void epdc_powerup(struct mxc_epdc_fb_data *fb_data)
 	}
 
 #endif //] USE_BSP_PMIC
+
+	k_set_temperature(&fb_data->info);
 
 	/* Enable pins used by EPDC */
 	if (fb_data->pdata->enable_pins) {
@@ -1319,6 +1332,15 @@ static void epdc_powerdown(struct mxc_epdc_fb_data *fb_data)
 	/* turn off the V3p3 */
 	regulator_disable(fb_data->v3p3_regulator);
 #else //][!USE_BSP_PMIC
+	if(8==gptHWCFG->m_val.bDisplayCtrl) {
+		int iChk;
+		iChk = fp9928_output_power(0,0);
+		if(iChk<0) {
+			printk(KERN_ERR "%s(%d):[warning] disable power from FP9928 fail ,errno=%d !\n",
+				__FILE__,__LINE__,iChk);
+		}
+	}
+	else 
 	{
 		int iChk;
 		unsigned long dwTPS65185_mode = TPS65185_MODE_STANDBY;
@@ -1348,7 +1370,6 @@ static void epdc_powerdown(struct mxc_epdc_fb_data *fb_data)
 	GALLEN_DBGLOCAL_END();
 }
 
-#include "mxc_epdc_fake_s1d13522.c"
 
 static void epdc_init_sequence(struct mxc_epdc_fb_data *fb_data)
 {
@@ -3189,7 +3210,7 @@ static int mxc_epdc_fb_send_single_update(struct mxcfb_update_data *upd_data,
 		}
 	}
 
-	k_set_temperature(info);
+	//k_set_temperature(info);
 	mutex_lock(&fb_data->queue_mutex);
 
 	/*
@@ -6124,6 +6145,17 @@ static int mxc_epdc_fb_suspend(struct platform_device *pdev, pm_message_t state)
 #endif//]
 
 #ifdef EPD_PMIC_SUSPEND//[
+	if(8==gptHWCFG->m_val.bDisplayCtrl) {
+
+		if(fp9928_suspend()>=0) {
+			ret = 0;
+		}
+		else {
+			ret = -1;
+		}
+
+	}
+	else 
 	if(6==gptHWCFG->m_val.bDisplayCtrl||7==gptHWCFG->m_val.bDisplayCtrl) {
 		GALLEN_DBGLOCAL_RUNLOG(3);
 		if(tps65185_suspend()>=0) {
@@ -6159,6 +6191,10 @@ static int mxc_epdc_fb_resume(struct platform_device *pdev)
 	GALLEN_DBGLOCAL_BEGIN();
 
 #ifdef EPD_PMIC_SUSPEND //[ 
+	if(8==gptHWCFG->m_val.bDisplayCtrl) {
+		fp9928_resume();
+	}
+	else 
 	if(6==gptHWCFG->m_val.bDisplayCtrl||7==gptHWCFG->m_val.bDisplayCtrl) {
 		tps65185_resume();
 	}
@@ -6209,6 +6245,15 @@ static void mxc_epdc_fb_shutdown(struct platform_device *pdev)
 	if (regulator_is_enabled(fb_data->v3p3_regulator))
 		regulator_disable(fb_data->v3p3_regulator);
 #else //][
+	if(8==gptHWCFG->m_val.bDisplayCtrl) {
+		int iChk;
+		iChk = fp9928_power_onoff(0,0);
+		if(iChk<0) {
+			printk(KERN_ERR "%s(%d):[warning] power off FP9928 fail ,errno=%d !\n",
+				__FILE__,__LINE__,iChk);
+		}
+	}
+	else
 	{
 		int iChk;
 		unsigned long dwTPS65185_mode = TPS65185_MODE_STANDBY;
@@ -6217,7 +6262,7 @@ static void mxc_epdc_fb_shutdown(struct platform_device *pdev)
 		if(iChk<0) {
 			printk(KERN_ERR "%s(%d):[warning] change to power sleep fail ,errno=%d !\n",
 				__FILE__,__LINE__,iChk);
-		}	
+		}
 		
 	}
 #endif //] USE_BSP_PMIC

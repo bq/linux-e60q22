@@ -151,7 +151,7 @@ volatile unsigned long gdwWF_size;
 
 volatile int giRootDevNum=0;
 volatile int giRootPartNum=1;
-
+volatile long glVCOM_uV;
 
 
 
@@ -198,6 +198,18 @@ void _MemoryRelease(void * unmap_addr, unsigned long addr, unsigned long len)
     release_mem_region(addr, len);
     printk(KERN_INFO "fake_s1d13522:  release memory region!\n");
 }
+
+static int _MYINIT_TEXT vcom_uV_setup(char *str)
+{
+	#if (_TEST_CMDLINE == 0)
+	glVCOM_uV = (long)simple_strtol(str,NULL,0);
+	printk("%s() VCOM uV=%d\n",__FUNCTION__,glVCOM_uV);
+	#else
+	printk("%s() str=%s\n",__FUNCTION__,str);
+	#endif
+	return 1;
+}
+
 
 
 
@@ -297,6 +309,7 @@ static int _MYINIT_TEXT root_path_setup(char *str)
 }
 
 #if (_MYCMDLINE_PARSE==0) //[
+__setup("vcom=",vcom_uV_setup);
 __setup("waveform_p=",waveform_p_setup);
 __setup("waveform_sz=",waveform_size_setup);
 __setup("logo_p=",logo_p_setup);
@@ -308,9 +321,9 @@ void fake_s1d13522_parse_epd_cmdline(void)
 	char *pcPatternStart,*pcPatternVal,*pcPatternValEnd,cTempStore='\0';
 	unsigned long ulPatternLen;
 
-	char *szParsePatternA[]={"waveform_sz=","waveform_p=","logo_sz=","logo_p=","root="};
+	char *szParsePatternA[]={"vcom=","waveform_sz=","waveform_p=","logo_sz=","logo_p=","root="};
 	int ((*pfnDispatchA[])(char *str))={ \
-		waveform_size_setup,waveform_p_setup,\
+		vcom_uV_setup,waveform_size_setup,waveform_p_setup,\
 		logo_size_setup,logo_p_setup,root_path_setup };
 		
 	int i;
@@ -389,24 +402,32 @@ static int read_file(char *filename, char *pBuffer)
   return result;
 }
 
-static int write_file_ex(char *filename, char *data,unsigned long dwSize)
+int fake_s1d13522_write_file_ex2(char *filename, char *data,unsigned long dwDataSize,unsigned long dwSeekSize)
 {
   struct file *file;
   loff_t pos = 0;
   int fd;
 	int iRet = 1;
+	loff_t fsz_chk,fsz_temp ;
+  mm_segment_t old_fs;
 
   file = filp_open(filename, O_WRONLY|O_CREAT, 0644);
-  mm_segment_t old_fs = get_fs();
 
 	if (IS_ERR(file)) {
   	printk ("[%s-%d] failed open %s,(%p)\n",__func__,__LINE__,filename,file);
 	}
 	else {
 		ssize_t tSz;
+
+  	old_fs = get_fs();
 		set_fs(KERNEL_DS);
-		tSz = file->f_op->write(file, (char *)data, dwSize, &file->f_pos);
-		if(dwSize!=tSz) {
+		fsz_temp = (loff_t)dwSeekSize;
+		fsz_chk = file->f_op->llseek(file,fsz_temp,SEEK_SET);
+		if(fsz_temp!=fsz_chk) {
+			printk("[WARNING] %s() : seek size check fail %d!=%d\n",__FUNCTION__,fsz_chk,fsz_temp);
+		}
+		tSz = file->f_op->write(file, (char *)data, dwDataSize, &file->f_pos);
+		if(dwDataSize!=tSz) {
 			printk ("[%s-%d] failed write %s,%d!=4096\n",__func__,__LINE__,filename,tSz);
 			iRet = 0;
 		}
@@ -415,6 +436,11 @@ static int write_file_ex(char *filename, char *data,unsigned long dwSize)
 	}
   return iRet;
 
+}
+
+static int write_file_ex(char *filename, char *data,unsigned long dwSize)
+{
+	return fake_s1d13522_write_file_ex2(filename,data,dwSize,0);
 }
 
 static int write_file(char *filename, char *data)
@@ -573,6 +599,19 @@ EPDFB_DC *fake_s1d13522_initEx3(unsigned char bBitsPerPixel,unsigned char *pbDCB
 #if (_MYCMDLINE_PARSE==1) //[
 	fake_s1d13522_parse_epd_cmdline();
 #endif //]
+
+	if(0==glVCOM_uV) {
+		unsigned short wVCOM_10mV = 0 ;
+		short sVCOM_10mV;
+
+		wVCOM_10mV = gptHWCFG->m_val.bVCOM_10mV_HiByte<<8|gptHWCFG->m_val.bVCOM_10mV_LoByte;
+		sVCOM_10mV = (short) wVCOM_10mV;
+		glVCOM_uV = (long)sVCOM_10mV*10000;
+
+		printk("%s:VCOM from HWCONFIG 0x%x=>%hd 10mV,%ld uV\n",
+				__FUNCTION__,wVCOM_10mV,sVCOM_10mV,glVCOM_uV);
+
+	}
 
 	gwScrW = wScrW;
 	gwScrH = wScrH;
