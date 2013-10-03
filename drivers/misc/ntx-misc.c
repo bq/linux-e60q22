@@ -32,12 +32,15 @@
 #include <linux/i2c.h>
 #include <linux/irq.h>
 
+#include "ntx_hwconfig.h"
 #include "ntx-misc.h"
 
 #include "../../arch/arm/mach-mx6/board-mx6sl_ntx.h"
 
 #define GDEBUG 0
 #include <linux/gallen_dbg.h>
+
+extern volatile NTX_HWCONFIG *gptHWCFG;
 
 struct ntx_misc_platform_data *ntx_misc;
 
@@ -588,7 +591,11 @@ static __devinit int msp430_i2c_probe(struct i2c_client *client,
 	if (err < 0) {
 		printk(KERN_ERR "%s(%s): Can't allocate irq %d\n", __FILE__, __func__, client->irq);
 	}
-	enable_irq_wake(client->irq);
+	
+	if(0x03!=gptHWCFG->m_val.bUIConfig) {
+		// UIConfig not RD mode .
+		enable_irq_wake(client->irq);
+	}
 	
 	return 0;
 }

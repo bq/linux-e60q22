@@ -56,6 +56,8 @@ typedef struct tagNTXHWCFG_VAL {
 	unsigned char bFrontLight_Flags;// Front Light Flags .
 	unsigned char bPCB_Flags;// PCB Flags .
 	unsigned char bFrontLight_LED_Driver;// Front Light LED driver .
+	unsigned char bVCOM_10mV_HiByte;// VCOM mV High byte .
+	unsigned char bVCOM_10mV_LoByte;// VCOM mV Low byte .
 } NTXHWCFG_VAL ;
 
 typedef struct tagNTX_HWCONFG{
@@ -178,6 +180,8 @@ extern const char * gszFrontLightLEDrvA[];//Front Light LED driver IC .
 #define HWCFG_FLDIDX_FrontLight_Flags			36 // v1.5
 #define HWCFG_FLDIDX_PCB_Flags			37 // v1.6
 #define HWCFG_FLDIDX_FrontLight_LEDrv			38 // v1.7
+#define HWCFG_FLDIDX_VCOM_10mV_HiByte			39 // v1.8
+#define HWCFG_FLDIDX_VCOM_10mV_LoByte			40 // v1.8
 
 
 

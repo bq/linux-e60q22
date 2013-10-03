@@ -92,8 +92,8 @@ static int tle4913Q_func(int iGPIOVal,unsigned uGPIO)
 void tle4913_init(void)
 {
 	if(gptHWCFG&&1==gptHWCFG->m_val.bHallSensor) {
-		if(33==gptHWCFG->m_val.bPCB) {
-			// E60Q2X .
+		if(33==gptHWCFG->m_val.bPCB||36==gptHWCFG->m_val.bPCB) {
+			// E60Q2X & E60Q3X.
 			gtTLE4913_GPIO_data.uGPIO = IMX_GPIO_NR(5,12) ;
 			gtTLE4913_GPIO_data.tPADCtrl = MX6SL_PAD_SD1_DAT4__GPIO_5_12 ;
 		}

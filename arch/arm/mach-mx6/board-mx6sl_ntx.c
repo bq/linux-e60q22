@@ -1782,8 +1782,8 @@ int _ntx_wifi_power_ctrl (int isWifiEnable)
 
 
 		// sdio port process ...
-		if(33==gptHWCFG->m_val.bPCB) {
-			// E60Q2X .
+		if(33==gptHWCFG->m_val.bPCB||36==gptHWCFG->m_val.bPCB) {
+			// E60Q2X & E60Q3X.
 			gpio_free (MX6SL_SD3_CLK );
 			gpio_free (MX6SL_SD3_CMD );
 			gpio_free (MX6SL_SD3_DAT0);
@@ -1833,8 +1833,8 @@ int _ntx_wifi_power_ctrl (int isWifiEnable)
 
 	if(isWifiEnable == 0){ // switch PIN function to GPIO
 		// sdio port disable ...
-		if(33==gptHWCFG->m_val.bPCB) {
-			//E60Q2X .
+		if(33==gptHWCFG->m_val.bPCB||36==gptHWCFG->m_val.bPCB) {
+			// E60Q2X & E60Q3X.
 			mxc_iomux_v3_setup_multiple_pads(mx6sl_ntx_sd3_gpio_pads, ARRAY_SIZE(mx6sl_ntx_sd3_gpio_pads));
 			gpio_request (MX6SL_SD3_CLK	, "MX6SL_SD3_CLK" );
 			gpio_request (MX6SL_SD3_CMD	, "MX6SL_SD3_CMD" );
@@ -1947,8 +1947,8 @@ static void ntx_gpio_init(void)
 	mxc_iomux_v3_setup_multiple_pads(mx6sl_brd_ntx_pads,
 					ARRAY_SIZE(mx6sl_brd_ntx_pads));
 
-	if(33==gptHWCFG->m_val.bPCB) {
-		// E60Q2X ...
+	if(33==gptHWCFG->m_val.bPCB||36==gptHWCFG->m_val.bPCB) {
+			// E60Q2X & E60Q3X.
 		mxc_iomux_v3_setup_multiple_pads(mx6sl_brd_ntx_sd4_pads,
 					ARRAY_SIZE(mx6sl_brd_ntx_sd4_pads));
 		mxc_iomux_v3_setup_multiple_pads(mx6sl_brd_ntx_sd1_gpio_pads,
@@ -1979,8 +1979,9 @@ static void ntx_gpio_init(void)
 		gpio_direction_output (GPIO_ISD_3V3_ON, 0);
 		gpio_request (GPIO_IR_3V3_ON, "IR_3V3_ON");
 		gpio_direction_output (GPIO_IR_3V3_ON, 1);
-		gpio_request (GPIO_EP_3V3_ON, "EP_3V3_ON");
-		gpio_direction_output (GPIO_EP_3V3_ON, 1);
+
+		//gpio_request (GPIO_EP_3V3_ON, "EP_3V3_ON");
+		//gpio_direction_output (GPIO_EP_3V3_ON, 1);
 	}
 	else {
 		mxc_iomux_v3_setup_multiple_pads(mx6sl_brd_ntx_sd4_gpio_pads,
@@ -2133,6 +2134,7 @@ static void __init mx6_ntx_init(void)
 
 	switch(gptHWCFG->m_val.bPCB) {
 	case 33: //E60Q2X .
+  case 36: //E60Q3X .
 		// SD1 = GPIO
 		// SD2 = ESD
 		// SD3 = SDIO WIFI
@@ -2217,6 +2219,7 @@ static void __init mx6_ntx_init(void)
 			ntx_gpio_key_data.nbuttons = ARRAY_SIZE(gpio_key_matrix_FL);
 			break;
 		case 33://E60Q2X
+    case 36://E60Q3X
 			ntx_gpio_key_data.buttons = gpio_key_HOME;
 			ntx_gpio_key_data.nbuttons = ARRAY_SIZE(gpio_key_HOME);
 			break;
