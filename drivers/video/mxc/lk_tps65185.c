@@ -993,7 +993,7 @@ int tps65185_init(int iPort,int iEPDTimingType)
 		// E606FXA/E606FXB/E60Q2X ...
 		giIsTPS65185_turnoff_EP3V3=1;
 		printk("%s(%d): EP_3V3 ON/OFF control enabled !\n",__FILE__,__LINE__);
-	}esle if(36==gptHWCFG->m_val.bPCB) {
+	} else if(36==gptHWCFG->m_val.bPCB) {
     // E60Q3X ...
 		giIsTPS65185_turnoff_EP3V3=1;
 		printk("%s(%d): EP_3V3 ON/OFF control enabled !\n",__FILE__,__LINE__);
