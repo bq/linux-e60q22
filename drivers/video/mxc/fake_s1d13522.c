@@ -151,7 +151,7 @@ volatile unsigned long gdwWF_size;
 
 volatile int giRootDevNum=0;
 volatile int giRootPartNum=1;
-volatile long glVCOM_uV;
+volatile long glVCOM_uV = 0;
 
 
 
@@ -321,9 +321,13 @@ void fake_s1d13522_parse_epd_cmdline(void)
 	char *pcPatternStart,*pcPatternVal,*pcPatternValEnd,cTempStore='\0';
 	unsigned long ulPatternLen;
 
-	char *szParsePatternA[]={"vcom=","waveform_sz=","waveform_p=","logo_sz=","logo_p=","root="};
+//	char *szParsePatternA[]={"vcom=","waveform_sz=","waveform_p=","logo_sz=","logo_p=","root="};
+//	int ((*pfnDispatchA[])(char *str))={ \
+//		vcom_uV_setup,waveform_size_setup,waveform_p_setup,\
+//		logo_size_setup,logo_p_setup,root_path_setup };
+	char *szParsePatternA[]={"waveform_sz=","waveform_p=","logo_sz=","logo_p=","root="};
 	int ((*pfnDispatchA[])(char *str))={ \
-		vcom_uV_setup,waveform_size_setup,waveform_p_setup,\
+		waveform_size_setup,waveform_p_setup,\
 		logo_size_setup,logo_p_setup,root_path_setup };
 		
 	int i;
