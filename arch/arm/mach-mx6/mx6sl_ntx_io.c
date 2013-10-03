@@ -1355,6 +1355,8 @@ static int gpio_initials(void)
 extern void __iomem *apll_base;
 unsigned long gUart_ucr1;
 
+static void __iomem *reg_uart1;
+
 void ntx_gpio_suspend (void)
 {
 	g_wakeup_by_alarm = 0;
@@ -1390,14 +1392,14 @@ void ntx_gpio_suspend (void)
 //			gpio_direction_output (GPIO_IR_3V3_ON, 0);
 		}
 	}
-	gUart_ucr1 = __raw_readl(ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
-	__raw_writel(0, ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
+	gUart_ucr1 = __raw_readl(reg_uart1 + 0x80);
+	__raw_writel(0, reg_uart1 + 0x80);
 
 }
 
 void ntx_gpio_resume (void)
 {
-	__raw_writel(gUart_ucr1, ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
+	__raw_writel(gUart_ucr1, reg_uart1 + 0x80);
 	if (gSleep_Mode_Suspend) {
 		if(0x03!=gptHWCFG->m_val.bUIConfig) {
 			// turn on ir touch power.
@@ -1498,6 +1500,8 @@ static int __init initDriver(void)
 		printk("pvi_io: can't get major number\n");
 		return ret;
 	}
+
+reg_uart1 = ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K);
 
     gpio_initials();
 
