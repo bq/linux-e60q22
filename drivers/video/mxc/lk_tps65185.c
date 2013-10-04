@@ -989,7 +989,7 @@ int tps65185_init(int iPort,int iEPDTimingType)
 
 	INIT_DELAYED_WORK(&gtPwrdwn_work_param.pwrdwn_work,tps65185_pwrdwn_work_func);
 
-	if(34==gptHWCFG->m_val.bPCB||35==gptHWCFG->m_val.bPCB||33==gptHWCFG->m_val.bPCB) {
+	if (34==gptHWCFG->m_val.bPCB||35==gptHWCFG->m_val.bPCB||33==gptHWCFG->m_val.bPCB) {
 		// E606FXA/E606FXB/E60Q2X ...
 		giIsTPS65185_turnoff_EP3V3=1;
 		printk("%s(%d): EP_3V3 ON/OFF control enabled !\n",__FILE__,__LINE__);
