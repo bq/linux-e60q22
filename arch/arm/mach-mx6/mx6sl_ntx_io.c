@@ -1370,22 +1370,22 @@ void ntx_gpio_suspend (void)
 		//gpio_direction_output (MX6SL_EP_PWRALL, 0);
 		
 		
-		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SCL__GPIO_3_14);
+/*		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SCL__GPIO_3_14);
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SDA__GPIO_3_15);
 		gpio_request(IMX_GPIO_NR(3, 14), "i2c2_scl");
 		gpio_request(IMX_GPIO_NR(3, 15), "i2c2_sda");
 		gpio_direction_output (IMX_GPIO_NR(3, 14), 0);
-		gpio_direction_output (IMX_GPIO_NR(3, 15), 0);
+		gpio_direction_output (IMX_GPIO_NR(3, 15), 0);*/
 	
 		if(0x03!=gptHWCFG->m_val.bUIConfig) {
 			// turn off ir touch power.
 //			gpio_direction_output (gMX6SL_IR_TOUCH_INT, 0);
-			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__GPIO_3_12);
+/*			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__GPIO_3_12);
 			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SDA__GPIO_3_13);
 			gpio_request(IMX_GPIO_NR(3, 12), "i2c1_scl");
 			gpio_request(IMX_GPIO_NR(3, 13), "i2c1_sda");
 			gpio_direction_output (IMX_GPIO_NR(3, 12), 0);
-			gpio_direction_output (IMX_GPIO_NR(3, 13), 0);
+			gpio_direction_output (IMX_GPIO_NR(3, 13), 0);*/
 
 		
 //			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
@@ -1404,10 +1404,12 @@ void ntx_gpio_resume (void)
 		if(0x03!=gptHWCFG->m_val.bUIConfig) {
 			// turn on ir touch power.
 //			gpio_direction_output (GPIO_IR_3V3_ON, 1);
-			gpio_free(IMX_GPIO_NR(3, 12));
+
+/*			gpio_free(IMX_GPIO_NR(3, 12));
 			gpio_free(IMX_GPIO_NR(3, 13));
 			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__I2C1_SCL);
-			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SDA__I2C1_SDA);
+			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SDA__I2C1_SDA);*/
+
 //			gpio_direction_input (gMX6SL_IR_TOUCH_INT);
 //			mdelay (20);
 //			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 1);
@@ -1418,10 +1420,10 @@ void ntx_gpio_resume (void)
 //			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 1);
 		}
 	
-		gpio_free(IMX_GPIO_NR(3, 14));
+/*		gpio_free(IMX_GPIO_NR(3, 14));
 		gpio_free(IMX_GPIO_NR(3, 15));
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SCL__I2C2_SCL);
-		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SDA__I2C2_SDA);
+		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SDA__I2C2_SDA);*/
 	
 		//gpio_direction_output (GPIO_EP_3V3_ON, 1);
 		//mdelay (5);
