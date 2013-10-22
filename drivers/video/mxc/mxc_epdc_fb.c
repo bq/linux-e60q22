@@ -6209,7 +6209,7 @@ static int mxc_epdc_fb_resume(struct platform_device *pdev)
 	mxc_epdc_fb_blank(FB_BLANK_UNBLANK, &data->info);
 #endif//] EPD_SUSPEND_BLANK
 
-	epdc_init_settings(data);
+	//epdc_init_settings(data);
 	
 	data->updates_active = false;
 
