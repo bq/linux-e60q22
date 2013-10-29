@@ -64,14 +64,15 @@
 #include <linux/gallen_dbg.h>
 
 //#define DO_NOT_POWEROFF				1
-#define NTX_WFM_MODE_OPTIMIZED 1
+//#define NTX_WFM_MODE_OPTIMIZED 1
 
+#define MX50_IOCTL_IF	1
 
 /*
  * Enable this define to have a default panel
  * loaded during driver initialization
  */
-//#define DEFAULT_PANEL_HW_INIT
+#define DEFAULT_PANEL_HW_INIT
 
 #define NUM_SCREENS_MIN	2
 
