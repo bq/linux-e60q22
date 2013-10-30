@@ -63,11 +63,12 @@ int up_read_reg(unsigned char reg)
 		{.addr = g_up_i2c_client->addr, .flags = I2C_M_RD, .len = 2, .buf = buffer,},
 	};
 
-	do {
-		ret = i2c_transfer(g_up_i2c_client->adapter, msg, 2);
+	ret = i2c_transfer(g_up_i2c_client->adapter, msg, 2);
+	while (ret == -EBUSY && retry < MAX_I2C_RETRY) {
 		msleep(10);
 		retry++;
-	} while (ret == -EBUSY && retry < MAX_I2C_RETRY);
+		ret = i2c_transfer(g_up_i2c_client->adapter, msg, 2);
+	}
 
 	if(0 > ret)
 		printk ("[%s-%d] i2c_transfer failed...\n", __func__, __LINE__);
@@ -87,11 +88,12 @@ int up_write_reg(unsigned char reg, int value)
 	buffer[1] = value >> 8;
 	buffer[2] = value & 0xFF;
 
-	do {
+	ret = i2c_transfer(g_up_i2c_client->adapter, msg, 1);
+	while (ret == -EBUSY && retry < MAX_I2C_RETRY) {
 		ret = i2c_transfer(g_up_i2c_client->adapter, msg, 1);
 		msleep(10);
 		retry++;
-	} while (ret == -EBUSY && retry < MAX_I2C_RETRY);
+	}
 
 	if(ret < 0)
 		printk ("[%s-%d] i2c_transfer failed...\n", __func__, __LINE__);
