@@ -2063,7 +2063,7 @@ int tps65185_suspend(void)
 
 	if(delayed_work_pending(&gtPwrdwn_work_param.pwrdwn_work)) {
 		WARNING_MSG("pmic pwrdwn delay work pending !!\n");
-		flush_delayed_work(&gtPwrdwn_work_param.pwrdwn_work);
+		flush_work(&gtPwrdwn_work_param.pwrdwn_work);
 		//tps65185_irqs_enable(1);
 		//return -1;
 	}
