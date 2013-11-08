@@ -325,6 +325,8 @@ static void gpio_keys_report_event(struct gpio_button_data *bdata)
 	unsigned int type = button->type ?: EV_KEY;
 	int state = (gpio_get_value_cansleep(button->gpio) ? 1 : 0) ^ button->active_low;
 
+printk("%s: code: %d, type %d, state %d, isr_state %d\n", __func__, button->code, type, state, bdata->isr_state);
+
 	if (state != bdata->isr_state)	// do nothing if key bounced.
 		return;
 		
