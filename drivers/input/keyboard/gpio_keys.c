@@ -363,6 +363,8 @@ static irqreturn_t gpio_keys_isr(int irq, void *dev_id)
 
 	BUG_ON(irq != gpio_to_irq(button->gpio));
 
+printk("%s\n", __func__);
+	pm_wakeup_event(bdata->input->dev.parent, 3000);
 	bdata->isr_state = (gpio_get_value(button->gpio) ? 1 : 0) ^ button->active_low;
 	if (bdata->timer_debounce)
 		mod_timer(&bdata->timer,
@@ -640,9 +642,9 @@ static int gpio_keys_resume(struct device *dev)
 			disable_irq_wake(irq);
 		}
 
-		gpio_keys_report_event(&ddata->data[i]);
+//		gpio_keys_report_event(&ddata->data[i]);
 	}
-	input_sync(ddata->input);
+//	input_sync(ddata->input);
 
 	return 0;
 }
