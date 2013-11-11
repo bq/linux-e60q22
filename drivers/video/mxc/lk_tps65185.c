@@ -60,7 +60,7 @@
 //#define TPS65185_PWR_ONOFF_WAITBYCOMPLETE		1
 
 #define TPS65185_PWROFFDELAYWORK_TICKS		50
-#define TPS65185_RESUME_EP3V3_ON					1
+//#define TPS65185_RESUME_EP3V3_ON					1
 
 #define VCOM_ENABLE		1
 #define VCOM_DISABLE	0
@@ -500,30 +500,6 @@ static int tps65185_get_reg(unsigned char bRegAddr,unsigned char  *O_pbRegVal)
 })
 
 #define TPS65185_REG(_regName)	gbTPS65185_REG_##_regName
-
-#if 0 //[
-#define TPS65185_VCOM_OUT(_out_val)	\
-	if(_out_val) { \
-		gpio_direction_output(GPIO_TPS65185_VCOMCTRL, VCOM_ENABLE); \
-	} \
-	else { \
-		gpio_direction_output(GPIO_TPS65185_VCOMCTRL, VCOM_DISABLE); \
-	}
-#else //][!
-#define TPS65185_VCOM_OUT(_out_val)	\
-	if(_out_val) { \
-		unsigned char bReg;\
-		gpio_direction_output(GPIO_TPS65185_VCOMCTRL, VCOM_ENABLE); \
-		bReg = (unsigned char)TPS65185_REG_GET(ENABLE);\
-		if(!(bReg&TPS65185_REG_ENABLE_VCOM_EN)) {\
-			WARNING_MSG("[WARNING] %s():ENABLE=0x%x, VOM_EN=0 but gpio=1\n",__FUNCTION__,bReg);\
-			TPS65185_REG_SET(ENABLE,VCOM_EN,1);\
-		}\
-	} \
-	else { \
-		gpio_direction_output(GPIO_TPS65185_VCOMCTRL, VCOM_DISABLE); \
-	}
-#endif //]
 
 DECLARE_WAIT_QUEUE_HEAD(tps65185_ACQC_WQ);
 DECLARE_WAIT_QUEUE_HEAD(tps65185_PRGC_WQ);
@@ -1606,7 +1582,7 @@ int tps65185_chg_mode(unsigned long *IO_pdwMode,int iIsWaitPwrOff)
 			tps65185_wait_panel_poweron();
 		}
 
-		TPS65185_VCOM_OUT(1);
+		gpio_direction_output(GPIO_TPS65185_VCOMCTRL, VCOM_ENABLE);
 		msleep(10);
 		//ERR_MSG(".\n");
 		gtTPS65185_DataA[0].dwCurrent_mode = dwNewMode;
@@ -1622,7 +1598,7 @@ int tps65185_chg_mode(unsigned long *IO_pdwMode,int iIsWaitPwrOff)
 
 		if(TPS65185_MODE_ACTIVE==dwCurrent_mode) 
 		{
-			udelay(100);TPS65185_VCOM_OUT(0);
+			udelay(100);gpio_direction_output(GPIO_TPS65185_VCOMCTRL, VCOM_DISABLE);
 
 #ifdef TPS65185_PWROFFDELAYWORK_TICKS//[
 
@@ -1691,7 +1667,7 @@ int tps65185_chg_mode(unsigned long *IO_pdwMode,int iIsWaitPwrOff)
 
 		}
 		else if(TPS65185_MODE_ACTIVE==dwCurrent_mode) {
-			udelay(100);TPS65185_VCOM_OUT(0);
+			udelay(100);gpio_direction_output(GPIO_TPS65185_VCOMCTRL, VCOM_DISABLE);
 
 			gtPwrdwn_work_param.dwNewMode = dwNewMode;
 			gtPwrdwn_work_param.iIsWaitPwrOff = iIsWaitPwrOff;
@@ -1950,7 +1926,7 @@ int tps65185_ONOFF(int iIsON)
 		//mxc_iomux_v3_setup_pad(MX50_PAD_I2C2_SCL__I2C2_SCL);
 		//mxc_iomux_v3_setup_pad(MX50_PAD_I2C2_SDA__I2C2_SDA);
 
-		//TPS65185_VCOM_OUT(1);
+		//gpio_direction_output(GPIO_TPS65185_VCOMCTRL, VCOM_ENABLE);
 
 
 		gpio_direction_output(GPIO_TPS65185_VIN, 1);
@@ -1990,7 +1966,7 @@ int tps65185_ONOFF(int iIsON)
 		gpio_direction_output(GPIO_TPS65185_PWRGOOD, 0);
 		gpio_direction_output(GPIO_TPS65185_INT, 0);
 
-		TPS65185_VCOM_OUT(0);
+		//gpio_direction_output(GPIO_TPS65185_VCOMCTRL, VCOM_DISABLE);
 
 		gpio_direction_output(GPIO_TPS65185_VIN, 0);
 

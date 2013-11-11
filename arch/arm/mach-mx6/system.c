@@ -199,11 +199,8 @@ void mxc_cpu_lp_set(enum mxc_cpu_pwr_mode mode)
 		if (stop_mode >= 2) {
 			/* dormant mode, need to power off the arm core */
 			__raw_writel(0x1, gpc_base + GPC_PGC_CPU_PDN_OFFSET);
-#if 0
 			if (cpu_is_mx6q() || cpu_is_mx6dl() && (4!=gptHWCFG->m_val.bRamType) ) 
-#else
-			if (cpu_is_mx6q() || cpu_is_mx6dl() || cpu_is_mx6sl()  ) 
-#endif
+//			if (cpu_is_mx6q() || cpu_is_mx6dl() || cpu_is_mx6sl()  ) 
 			{
 				/* If stop_mode_config is clear, then 2P5 will be off,
 				need to enable weak 2P5, as DDR IO need 2P5 as
@@ -227,7 +224,7 @@ void mxc_cpu_lp_set(enum mxc_cpu_pwr_mode mode)
 				}
 			} else {
 				if (stop_mode == 2) {
-#if 1
+#if 0
 					/* Disable VDDHIGH_IN to VDDSNVS_IN
 					  * power path, only used when VDDSNVS_IN
 					  * is powered by dedicated

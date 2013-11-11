@@ -59,7 +59,6 @@ static const uint8_t cmd_Frequency_v2[] = {0xEE, 0x07, 0x08, 10, 00, 100, 00, 10
 static const uint8_t cmd_getFirmwareVer_v2[] = {0xEE, 0x01, 0x1E};
 static const uint8_t cmd_Active_v2[] = {0xEE, 0x01, 0x01};
 static const uint8_t cmd_Deactive_v2[] = {0xEE, 0x01, 0x00};
-static const uint8_t cmd_single_touch_v2[] = {0xEE, 0x05,0x03,0,0,0,0};
 
 static uint8_t cmd_Resolution[] = {0x02, (DEFAULT_PANEL_W&0xFF), (DEFAULT_PANEL_W>>8), (DEFAULT_PANEL_H&0xFF), (DEFAULT_PANEL_H>>8)};
 static const uint8_t cmd_TouchData[] = {0x04};
@@ -166,10 +165,6 @@ static int zForce_ir_touch_recv_data(struct i2c_client *client, uint8_t *buf)
 			break;
 		case 3:
 			printk ("[%s-%d] command Configuration ...\n",__func__,__LINE__);
-			if(8==gptHWCFG->m_val.bTouchCtrl) {  //neonode v2
-				i2c_master_send(client, cmd_TouchData_v2, sizeof(cmd_TouchData_v2));
-			}	
-			g_zforce_initial_step = 3;
 			break;
 		case 4:
 //			printk ("[%s-%d] command Touch Data (count %d)...\n",__func__,__LINE__,buf[1]);
@@ -187,8 +182,7 @@ static int zForce_ir_touch_recv_data(struct i2c_client *client, uint8_t *buf)
 		case 8:
 			printk ("[%s-%d] command Frequency (%d) ...\n",__func__,__LINE__,buf[1]);
 			if(8==gptHWCFG->m_val.bTouchCtrl) {  //neonode v2
-//				i2c_master_send(client, cmd_TouchData_v2, sizeof(cmd_TouchData_v2));
-				i2c_master_send(client, cmd_single_touch_v2, sizeof(cmd_single_touch_v2));
+				i2c_master_send(client, cmd_TouchData_v2, sizeof(cmd_TouchData_v2));
 			}else{
 				i2c_master_send(client, cmd_TouchData, sizeof(cmd_TouchData));
 			}	
@@ -221,15 +215,9 @@ static int zForce_ir_touch_recv_data(struct i2c_client *client, uint8_t *buf)
 						i2c_master_send(client, cmd_Frequency, sizeof(cmd_Frequency));
 					}
 					break;
-				case 3:
-					if(8==gptHWCFG->m_val.bTouchCtrl) {  //neonode v2
-						i2c_master_send(client, cmd_TouchData_v2, sizeof(cmd_TouchData_v2));
-					}	
-					break;
 				case 8:
 					if(8==gptHWCFG->m_val.bTouchCtrl) {  //neonode v2
-//						i2c_master_send(client, cmd_TouchData_v2, sizeof(cmd_TouchData_v2));
-						i2c_master_send(client, cmd_single_touch_v2, sizeof(cmd_single_touch_v2));
+						i2c_master_send(client, cmd_TouchData_v2, sizeof(cmd_TouchData_v2));
 					}else{
 						i2c_master_send(client, cmd_TouchData, sizeof(cmd_TouchData));
 					}	
