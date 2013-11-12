@@ -129,11 +129,10 @@ if (d->irq == 344) printk("irq-debug: %s\n", __func__);
 	}
 
 	/* set the correct irq handler */
-/* Upstream mxc code does not set this, and it also causes spinlock recursions
 	if (type & (IRQ_TYPE_LEVEL_LOW | IRQ_TYPE_LEVEL_HIGH))
 		irq_set_handler(d->irq, handle_level_irq);
 	else if (type & IRQ_TYPE_EDGE_BOTH)
-		irq_set_handler(d->irq, handle_edge_irq);*/
+		irq_set_handler(d->irq, handle_edge_irq);
 
 	reg += GPIO_ICR1 + ((gpio & 0x10) >> 2); /* lower or upper register */
 	bit = gpio & 0xf;
