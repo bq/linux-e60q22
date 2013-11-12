@@ -1307,6 +1307,195 @@ static int gpio_initials(void)
 extern void __iomem *apll_base;
 unsigned long gUart_ucr1;
 
+static iomux_v3_cfg_t ntx_suspend_enter_pads[] = {
+	// I2C1,I2C2
+	MX6SL_PAD_I2C2_SCL__GPIO_3_14,
+	MX6SL_PAD_I2C2_SDA__GPIO_3_15,
+	MX6SL_PAD_I2C1_SCL__GPIO_3_12,
+	MX6SL_PAD_I2C1_SDA__GPIO_3_13,
+	// SD2
+	MX6SL_PAD_SD2_CLK__GPIO_5_5,
+	MX6SL_PAD_SD2_CMD__GPIO_5_4,
+	MX6SL_PAD_SD2_DAT0__GPIO_5_1,
+	MX6SL_PAD_SD2_DAT1__GPIO_4_30,
+	MX6SL_PAD_SD2_DAT2__GPIO_5_3,
+	MX6SL_PAD_SD2_DAT3__GPIO_4_28,
+	// SD3
+	MX6SL_PAD_SD3_CLK__GPIO_5_18,
+	MX6SL_PAD_SD3_CMD__GPIO_5_21,
+	MX6SL_PAD_SD3_DAT0__GPIO_5_19,
+	MX6SL_PAD_SD3_DAT1__GPIO_5_20,
+	MX6SL_PAD_SD3_DAT2__GPIO_5_16,
+	MX6SL_PAD_SD3_DAT3__GPIO_5_17,
+	// SD4 
+	MX6SL_PAD_FEC_TX_CLK__GPIO_4_21,
+	MX6SL_PAD_FEC_MDIO__GPIO_4_20,
+	MX6SL_PAD_FEC_RX_ER__GPIO_4_19,
+	MX6SL_PAD_FEC_CRS_DV__GPIO_4_25,
+	MX6SL_PAD_FEC_RXD1__GPIO_4_18,
+	MX6SL_PAD_FEC_TXD0__GPIO_4_24,
+	MX6SL_PAD_FEC_MDC__GPIO_4_23,
+	MX6SL_PAD_FEC_RXD0__GPIO_4_17,
+	MX6SL_PAD_FEC_TX_EN__GPIO_4_22,
+	MX6SL_PAD_FEC_TXD1__GPIO_4_16,
+
+	// TEST ONLY
+	MX6SL_PAD_ECSPI1_MISO__GPIO_4_10,
+	MX6SL_PAD_ECSPI1_MOSI__GPIO_4_9,
+	MX6SL_PAD_ECSPI1_SCLK__GPIO_4_8,
+	MX6SL_PAD_ECSPI1_SS0__GPIO_4_11,
+
+	MX6SL_PAD_ECSPI2_MISO__GPIO_4_14,
+	MX6SL_PAD_ECSPI2_MOSI__GPIO_4_13,
+	MX6SL_PAD_ECSPI2_SCLK__GPIO_4_12,
+	MX6SL_PAD_ECSPI2_SS0__GPIO_4_15,
+
+	MX6SL_PAD_EPDC_BDR0__GPIO_2_5,
+	MX6SL_PAD_EPDC_BDR1__GPIO_2_6,
+	MX6SL_PAD_EPDC_D0__GPIO_1_7,
+	MX6SL_PAD_EPDC_D1__GPIO_1_8,
+	MX6SL_PAD_EPDC_D10__GPIO_1_17,
+	MX6SL_PAD_EPDC_D11__GPIO_1_18,
+	MX6SL_PAD_EPDC_D12__GPIO_1_19,
+	MX6SL_PAD_EPDC_D13__GPIO_1_20,
+	MX6SL_PAD_EPDC_D14__GPIO_1_21,
+	MX6SL_PAD_EPDC_D15__GPIO_1_22,
+	MX6SL_PAD_EPDC_D2__GPIO_1_9,
+	MX6SL_PAD_EPDC_D3__GPIO_1_10,
+	MX6SL_PAD_EPDC_D4__GPIO_1_11,
+	MX6SL_PAD_EPDC_D5__GPIO_1_12,
+	MX6SL_PAD_EPDC_D6__GPIO_1_13,
+	MX6SL_PAD_EPDC_D7__GPIO_1_14,
+	MX6SL_PAD_EPDC_D8__GPIO_1_15,
+	MX6SL_PAD_EPDC_D9__GPIO_1_16,
+	MX6SL_PAD_EPDC_GDCLK__GPIO_1_31,
+	MX6SL_PAD_EPDC_GDOE__GPIO_2_0,
+	MX6SL_PAD_EPDC_GDRL__GPIO_2_1,
+	MX6SL_PAD_EPDC_GDSP__GPIO_2_2,
+	MX6SL_PAD_EPDC_PWRCOM__GPIO_2_11,
+	MX6SL_PAD_EPDC_PWRCTRL0__GPIO_2_7,
+	MX6SL_PAD_EPDC_PWRCTRL1__GPIO_2_8,
+	MX6SL_PAD_EPDC_PWRCTRL2__GPIO_2_9,
+	MX6SL_PAD_EPDC_PWRCTRL3__GPIO_2_10,
+	MX6SL_PAD_EPDC_PWRINT__GPIO_2_12,
+	MX6SL_PAD_EPDC_PWRSTAT__GPIO_2_13,
+	MX6SL_PAD_EPDC_PWRWAKEUP__GPIO_2_14,
+	MX6SL_PAD_EPDC_SDCE0__GPIO_1_27,
+	MX6SL_PAD_EPDC_SDCE1__GPIO_1_28,
+	MX6SL_PAD_EPDC_SDCE2__GPIO_1_29,
+	MX6SL_PAD_EPDC_SDCE3__GPIO_1_30,
+	MX6SL_PAD_EPDC_SDCLK__GPIO_1_23,
+	MX6SL_PAD_EPDC_SDLE__GPIO_1_24,
+	MX6SL_PAD_EPDC_SDOE__GPIO_1_25,
+	MX6SL_PAD_EPDC_SDSHR__GPIO_1_26,
+	MX6SL_PAD_EPDC_VCOM0__GPIO_2_3,
+	MX6SL_PAD_EPDC_VCOM1__GPIO_2_4,
+
+/*
+ffffff80
+00007fff
+0000f000
+53ffff00
+003f003a
+*/
+	MX6SL_PAD_FEC_REF_CLK__GPIO_4_26,
+	MX6SL_PAD_HSIC_DAT__GPIO_3_19,
+	MX6SL_PAD_HSIC_STROBE__GPIO_3_20,
+	MX6SL_PAD_KEY_COL0__GPIO_3_24,
+	MX6SL_PAD_KEY_COL1__GPIO_3_26,
+	MX6SL_PAD_KEY_COL2__GPIO_3_28,
+	MX6SL_PAD_KEY_COL3__GPIO_3_30,
+	MX6SL_PAD_KEY_COL4__GPIO_4_0,
+	MX6SL_PAD_KEY_COL5__GPIO_4_2,
+	MX6SL_PAD_KEY_COL6__GPIO_4_4,
+	MX6SL_PAD_KEY_COL7__GPIO_4_6,
+	MX6SL_PAD_KEY_ROW0__GPIO_3_25,
+	MX6SL_PAD_KEY_ROW1__GPIO_3_27,
+	MX6SL_PAD_KEY_ROW2__GPIO_3_29,
+	MX6SL_PAD_KEY_ROW3__GPIO_3_31,
+		MX6SL_PAD_KEY_ROW4__GPIO_4_1,
+		MX6SL_PAD_KEY_ROW5__GPIO_4_3,
+	MX6SL_PAD_KEY_ROW6__GPIO_4_5,
+	MX6SL_PAD_KEY_ROW7__GPIO_4_7,
+/*
+ffffff80
+00007fff
+ff18f000
+57ffffff
+003f003a
+*/
+	MX6SL_PAD_LCD_CLK__GPIO_2_15,
+	MX6SL_PAD_LCD_DAT0__GPIO_2_20,
+	MX6SL_PAD_LCD_DAT1__GPIO_2_21,
+	MX6SL_PAD_LCD_DAT10__GPIO_2_30,
+	MX6SL_PAD_LCD_DAT11__GPIO_2_31,
+	MX6SL_PAD_LCD_DAT12__GPIO_3_0,
+	MX6SL_PAD_LCD_DAT13__GPIO_3_1,
+	MX6SL_PAD_LCD_DAT14__GPIO_3_2,
+	MX6SL_PAD_LCD_DAT15__GPIO_3_3,
+	MX6SL_PAD_LCD_DAT16__GPIO_3_4,
+	MX6SL_PAD_LCD_DAT17__GPIO_3_5,
+	MX6SL_PAD_LCD_DAT18__GPIO_3_6,
+	MX6SL_PAD_LCD_DAT19__GPIO_3_7,
+	MX6SL_PAD_LCD_DAT2__GPIO_2_22,
+	MX6SL_PAD_LCD_DAT20__GPIO_3_8,
+	MX6SL_PAD_LCD_DAT21__GPIO_3_9,
+	MX6SL_PAD_LCD_DAT22__GPIO_3_10,
+	MX6SL_PAD_LCD_DAT23__GPIO_3_11,
+	MX6SL_PAD_LCD_DAT3__GPIO_2_23,
+	MX6SL_PAD_LCD_DAT4__GPIO_2_24,
+	MX6SL_PAD_LCD_DAT5__GPIO_2_25,
+	MX6SL_PAD_LCD_DAT6__GPIO_2_26,
+	MX6SL_PAD_LCD_DAT7__GPIO_2_27,
+	MX6SL_PAD_LCD_DAT8__GPIO_2_28,
+	MX6SL_PAD_LCD_DAT9__GPIO_2_29,
+	MX6SL_PAD_LCD_ENABLE__GPIO_2_16,
+	MX6SL_PAD_LCD_HSYNC__GPIO_2_17,
+	MX6SL_PAD_LCD_RESET__GPIO_2_19,
+	MX6SL_PAD_LCD_VSYNC__GPIO_2_18,
+	MX6SL_PAD_PWM1__GPIO_3_23,
+	MX6SL_PAD_REF_CLK_24M__GPIO_3_21,
+	MX6SL_PAD_REF_CLK_32K__GPIO_3_22,
+	MX6SL_PAD_SD1_CLK__GPIO_5_15,
+	MX6SL_PAD_SD1_CMD__GPIO_5_14,
+	MX6SL_PAD_SD1_DAT0__GPIO_5_11,
+	MX6SL_PAD_SD1_DAT1__GPIO_5_8,
+	MX6SL_PAD_SD1_DAT2__GPIO_5_13,
+	MX6SL_PAD_SD1_DAT3__GPIO_5_6,
+	MX6SL_PAD_SD1_DAT4__GPIO_5_12,
+	MX6SL_PAD_SD1_DAT5__GPIO_5_9,
+	MX6SL_PAD_SD1_DAT6__GPIO_5_7,
+	MX6SL_PAD_SD1_DAT7__GPIO_5_10,
+	MX6SL_PAD_SD2_DAT4__GPIO_5_2,
+	MX6SL_PAD_SD2_DAT5__GPIO_4_31,
+//		MX6SL_PAD_SD2_DAT6__GPIO_4_29,
+	MX6SL_PAD_SD2_DAT7__GPIO_5_0,
+	MX6SL_PAD_SD2_RST__GPIO_4_27,
+//	MX6SL_PAD_UART1_RXD__GPIO_3_16,
+//	MX6SL_PAD_UART1_TXD__GPIO_3_17,
+	MX6SL_PAD_WDOG_B__GPIO_3_18,
+/*
+0xffffff80
+0xffffffff
+0xfffcffff
+0xdfffffff
+0x003fffff
+
+    31 30 29 28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10 09 08 07 06 05 04 03 02 01 00
+1   1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  0  0  0  0  0  0  0
+2   1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1
+3   1  1  1  1  1  1  1  1  1  1  1  1  1  1  0  0  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1
+4   1  1  0  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1
+5   0  0  0  0  0  0  0  0  0  0  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1
+
+*/
+
+};
+
+static unsigned int ntx_gpio_dir[5];
+static iomux_v3_cfg_t local_suspend_enter_pads[ARRAY_SIZE(ntx_suspend_enter_pads)];
+static iomux_v3_cfg_t ntx_suspend_exit_pads[ARRAY_SIZE(ntx_suspend_enter_pads)];
+
 void ntx_gpio_suspend (void)
 {
 	g_wakeup_by_alarm = 0;
@@ -1322,20 +1511,20 @@ void ntx_gpio_suspend (void)
 		
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SCL__GPIO_3_14);
 		mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C2_SDA__GPIO_3_15);
-		gpio_request(IMX_GPIO_NR(3, 14), "i2c2_scl");
-		gpio_request(IMX_GPIO_NR(3, 15), "i2c2_sda");
-		gpio_direction_output (IMX_GPIO_NR(3, 14), 0);
-		gpio_direction_output (IMX_GPIO_NR(3, 15), 0);
+//		gpio_request(IMX_GPIO_NR(3, 14), "i2c2_scl");
+//		gpio_request(IMX_GPIO_NR(3, 15), "i2c2_sda");
+//		gpio_direction_output (IMX_GPIO_NR(3, 14), 0);
+//		gpio_direction_output (IMX_GPIO_NR(3, 15), 0);
 	
 		if(0x03!=gptHWCFG->m_val.bUIConfig) {
 			// turn off ir touch power.
 			gpio_direction_output (gMX6SL_IR_TOUCH_INT, 0);
 			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__GPIO_3_12);
 			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SDA__GPIO_3_13);
-			gpio_request(IMX_GPIO_NR(3, 12), "i2c1_scl");
-			gpio_request(IMX_GPIO_NR(3, 13), "i2c1_sda");
-			gpio_direction_output (IMX_GPIO_NR(3, 12), 0);
-			gpio_direction_output (IMX_GPIO_NR(3, 13), 0);
+//			gpio_request(IMX_GPIO_NR(3, 12), "i2c1_scl");
+//			gpio_request(IMX_GPIO_NR(3, 13), "i2c1_sda");
+//			gpio_direction_output (IMX_GPIO_NR(3, 12), 0);
+//			gpio_direction_output (IMX_GPIO_NR(3, 13), 0);
 
 		
 			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
@@ -1345,10 +1534,147 @@ void ntx_gpio_suspend (void)
 	gUart_ucr1 = __raw_readl(ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
 	__raw_writel(0, ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
 
+	if (gSleep_Mode_Suspend) {
+	    iomux_v3_cfg_t *p = local_suspend_enter_pads;
+	    int i;
+       void __iomem *base;
+
+	    /* Set PADCTRL to 0 for all IOMUX. */
+    	for (i = 0; i < ARRAY_SIZE(ntx_suspend_enter_pads); i++) {
+			*p = ntx_suspend_exit_pads[i] = ntx_suspend_enter_pads[i];
+			if( (*p) == (MX6SL_PAD_SD3_CLK__GPIO_5_18) ||
+				(*p) == (MX6SL_PAD_SD3_CMD__GPIO_5_21) ||
+				(*p) == (MX6SL_PAD_SD3_DAT0__GPIO_5_19) ||
+				(*p) == (MX6SL_PAD_SD3_DAT1__GPIO_5_20) ||
+				(*p) == (MX6SL_PAD_SD3_DAT2__GPIO_5_16) ||
+				(*p) == (MX6SL_PAD_SD3_DAT3__GPIO_5_17) )
+			{	
+		        *p &= ~MUX_PAD_CTRL_MASK;
+    		    /* Enable the Pull down and the keeper
+				 * Set the drive strength to 0.
+				 */
+				*p |= ((u64)0x3000 << MUX_PAD_CTRL_SHIFT);
+			}
+			else if( (*p) == (MX6SL_PAD_KEY_ROW4__GPIO_4_1) ||
+					(*p) == (MX6SL_PAD_KEY_ROW5__GPIO_4_3) ||
+					(*p) == (MX6SL_PAD_EPDC_SDCE2__GPIO_1_29) ) {
+				// pull down
+                *p &= ~MUX_PAD_CTRL_MASK;
+                *p |= ((u64)0x30b0 << MUX_PAD_CTRL_SHIFT);
+			}
+/*			else if(
+				(*p) == MX6SL_PAD_EPDC_BDR0__GPIO_2_5 ||
+				(*p) == MX6SL_PAD_EPDC_BDR1__GPIO_2_6 ||
+	(*p) ==  MX6SL_PAD_EPDC_D0__GPIO_1_7 ||
+	(*p) ==  MX6SL_PAD_EPDC_D1__GPIO_1_8 ||
+	(*p) ==  MX6SL_PAD_EPDC_D10__GPIO_1_17 ||
+	(*p) ==  MX6SL_PAD_EPDC_D11__GPIO_1_18 ||
+	(*p) ==  MX6SL_PAD_EPDC_D12__GPIO_1_19 ||
+	(*p) ==  MX6SL_PAD_EPDC_D13__GPIO_1_20 ||
+	(*p) ==  MX6SL_PAD_EPDC_D14__GPIO_1_21 ||
+	(*p) ==  MX6SL_PAD_EPDC_D15__GPIO_1_22 ||
+	(*p) ==  MX6SL_PAD_EPDC_D2__GPIO_1_9 ||
+	(*p) ==  MX6SL_PAD_EPDC_D3__GPIO_1_10 ||
+	(*p) ==  MX6SL_PAD_EPDC_D4__GPIO_1_11 ||
+	(*p) ==  MX6SL_PAD_EPDC_D5__GPIO_1_12 ||
+	(*p) ==  MX6SL_PAD_EPDC_D6__GPIO_1_13 ||
+	(*p) ==  MX6SL_PAD_EPDC_D7__GPIO_1_14 ||
+	(*p) ==  MX6SL_PAD_EPDC_D8__GPIO_1_15 ||
+	(*p) ==  MX6SL_PAD_EPDC_D9__GPIO_1_16 ||
+	(*p) ==  MX6SL_PAD_EPDC_GDCLK__GPIO_1_31 ||
+	(*p) ==  MX6SL_PAD_EPDC_GDOE__GPIO_2_0 ||
+	(*p) ==  MX6SL_PAD_EPDC_GDRL__GPIO_2_1 ||
+	(*p) ==  MX6SL_PAD_EPDC_GDSP__GPIO_2_2 ||
+	(*p) ==  MX6SL_PAD_EPDC_PWRCOM__GPIO_2_11 ||
+	(*p) ==  MX6SL_PAD_EPDC_PWRCTRL0__GPIO_2_7 ||
+	(*p) ==  MX6SL_PAD_EPDC_PWRCTRL1__GPIO_2_8 ||
+	(*p) ==  MX6SL_PAD_EPDC_PWRCTRL2__GPIO_2_9 ||
+	(*p) ==  MX6SL_PAD_EPDC_PWRCTRL3__GPIO_2_10 ||
+	(*p) ==  MX6SL_PAD_EPDC_PWRINT__GPIO_2_12 ||
+	(*p) ==  MX6SL_PAD_EPDC_PWRSTAT__GPIO_2_13 ||
+	(*p) ==  MX6SL_PAD_EPDC_PWRWAKEUP__GPIO_2_14 ||
+	(*p) ==  MX6SL_PAD_EPDC_SDCE0__GPIO_1_27 ||
+	(*p) ==  MX6SL_PAD_EPDC_SDCE1__GPIO_1_28 ||
+	(*p) ==  MX6SL_PAD_EPDC_SDCE2__GPIO_1_29 ||
+	(*p) ==  MX6SL_PAD_EPDC_SDCE3__GPIO_1_30 ||
+	(*p) ==  MX6SL_PAD_EPDC_SDCLK__GPIO_1_23 ||
+	(*p) ==  MX6SL_PAD_EPDC_SDLE__GPIO_1_24 ||
+	(*p) ==  MX6SL_PAD_EPDC_SDOE__GPIO_1_25 ||
+	(*p) ==  MX6SL_PAD_EPDC_SDSHR__GPIO_1_26 ||
+	(*p) ==  MX6SL_PAD_EPDC_VCOM0__GPIO_2_3 ||
+	(*p) ==  MX6SL_PAD_EPDC_VCOM1__GPIO_2_4 
+			) {
+                *p &= ~MUX_PAD_CTRL_MASK;
+                *p |= ((u64)0x3000 << MUX_PAD_CTRL_SHIFT);
+			}
+*/
+			else if ((*p) == MX6SL_PAD_SD2_DAT6__GPIO_4_29 ||
+					(*p) == MX6SL_PAD_SD1_DAT6__GPIO_5_7 ) {
+				// pull up
+				*p &= ~MUX_PAD_CTRL_MASK;
+				*p |= ((u64)0x0001b0b1 << MUX_PAD_CTRL_SHIFT);
+			}
+			else if((*p) == MX6SL_PAD_EPDC_PWRCTRL3__GPIO_2_10) {
+				// open drain
+				*p &= ~MUX_PAD_CTRL_MASK;
+				*p |= ((u64)0x000108b0 << MUX_PAD_CTRL_SHIFT);
+			}
+			else {
+				*p &= ~MUX_PAD_CTRL_MASK;
+				*p |= ((u64)0x000110b0 << MUX_PAD_CTRL_SHIFT);
+			}
+			p++;
+		}
+		mxc_iomux_v3_get_multiple_pads(ntx_suspend_exit_pads,
+			ARRAY_SIZE(ntx_suspend_exit_pads));
+		mxc_iomux_v3_setup_multiple_pads(local_suspend_enter_pads,
+            ARRAY_SIZE(local_suspend_enter_pads));
+
+		base = IO_ADDRESS(GPIO1_BASE_ADDR);
+		ntx_gpio_dir[0] = __raw_readl(base+4);
+		__raw_writel( ntx_gpio_dir[0]&(~0xffffff80), base+4);
+
+        base = IO_ADDRESS(GPIO2_BASE_ADDR);
+        ntx_gpio_dir[1] = __raw_readl(base+4);
+        __raw_writel( ntx_gpio_dir[1]&(~0xffffffff), base+4);
+
+        base = IO_ADDRESS(GPIO3_BASE_ADDR);
+        ntx_gpio_dir[2] = __raw_readl(base+4);
+        __raw_writel( ntx_gpio_dir[2]&(~0xfffcffff), base+4);
+
+        base = IO_ADDRESS(GPIO4_BASE_ADDR);
+        ntx_gpio_dir[3] = __raw_readl(base+4);
+        __raw_writel( ntx_gpio_dir[3]&(~0xdfffffff), base+4);
+
+        base = IO_ADDRESS(GPIO5_BASE_ADDR);
+        ntx_gpio_dir[4] = __raw_readl(base+4);
+        __raw_writel( ntx_gpio_dir[4]&(~0x003fffff), base+4);
+	}
 }
 
 void ntx_gpio_resume (void)
 {
+	if (gSleep_Mode_Suspend) {
+		void __iomem *base;
+
+        base = IO_ADDRESS(GPIO1_BASE_ADDR);
+        __raw_writel( ntx_gpio_dir[0], base+4);
+
+        base = IO_ADDRESS(GPIO2_BASE_ADDR);
+        __raw_writel( ntx_gpio_dir[1], base+4);
+
+        base = IO_ADDRESS(GPIO3_BASE_ADDR);
+        __raw_writel( ntx_gpio_dir[2], base+4);
+
+        base = IO_ADDRESS(GPIO4_BASE_ADDR);
+        __raw_writel( ntx_gpio_dir[3], base+4);
+
+        base = IO_ADDRESS(GPIO5_BASE_ADDR);
+        __raw_writel( ntx_gpio_dir[4], base+4);
+
+	    mxc_iomux_v3_setup_multiple_pads(ntx_suspend_exit_pads,
+	        ARRAY_SIZE(ntx_suspend_exit_pads));
+	}
 	__raw_writel(gUart_ucr1, ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
 	if (gSleep_Mode_Suspend) {
 		if(0x03!=gptHWCFG->m_val.bUIConfig) {
@@ -1378,7 +1704,9 @@ void ntx_gpio_resume (void)
 		tps65185_ONOFF(1);
 		//gpio_direction_output (MX6SL_EP_PWRALL, 1);
 	}
-	
+
+#ifdef CONFIG_ANDROID //[
+#else //][!CONFIG_ANDROID	
 	g_power_key_pressed = power_key_status();	// POWER key
 	if (g_power_key_pressed) 
 		mod_timer(&power_key_timer, jiffies + 1);
@@ -1390,6 +1718,7 @@ void ntx_gpio_resume (void)
 		ntx_led_blink (4, green_led_period);
 		ntx_led_blink (5, blue_led_period);
 	}
+#endif //]CONFIG_ANDROID
 }
 
 void ntx_gpio_touch_reset (void)

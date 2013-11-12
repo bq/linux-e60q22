@@ -39,7 +39,9 @@
 #if 0
 	extern int giDbgLvl; // 程式必須提供這個變數.
 #else
-	#define giDbgLvl 	0
+	#ifndef giDbgLvl //[
+		#define giDbgLvl 	0
+	#endif //]
 #endif
 
 
@@ -107,6 +109,12 @@
 		}
 	#define GALLEN_DBGLOCAL_BEGIN_EX(_bits)	\
 		GALLEN_DBGLOCAL_MUTEBEGIN_EX(_bits);\
+		if(giDbgLvl<=__iLocalDbgLvl){\
+			GALLEN_PRINT("%s(%d):%s() Enter (t=%d)...\n",__FILE__,__LINE__,__FUNCTION__,GET_CURRENT_TICK());\
+		}
+	#define GALLEN_DBGLOCAL_BEGIN_EX2(_bits,localdbglvl)	\
+		GALLEN_DBGLOCAL_MUTEBEGIN_EX(_bits);\
+		__iLocalDbgLvl=localdbglvl;\
 		if(giDbgLvl<=__iLocalDbgLvl){\
 			GALLEN_PRINT("%s(%d):%s() Enter (t=%d)...\n",__FILE__,__LINE__,__FUNCTION__,GET_CURRENT_TICK());\
 		}
@@ -237,6 +245,7 @@
 	
 	#define GALLEN_DBGLOCAL_BEGIN()	
 	#define GALLEN_DBGLOCAL_BEGIN_EX(bits)	
+	#define GALLEN_DBGLOCAL_BEGIN_EX2(bits,localdbglvl)	
 	#define GALLEN_DBGLOCAL_MUTEBEGIN()	
 	#define GALLEN_DBGLOCAL_MUTEBEGIN_EX(bits)	
 	#define GALLEN_DBGLOCAL_END() 
@@ -278,6 +287,7 @@
 	#define GALLEN_GET_INT(name)		
 	#define GALLEN_DBGLOCAL_BEGIN()	
 	#define GALLEN_DBGLOCAL_BEGIN_EX(bits)	
+	#define GALLEN_DBGLOCAL_BEGIN_EX2(bits,localdbglvl)	
 	#define GALLEN_DBGLOCAL_MUTEBEGIN()	
 	#define GALLEN_DBGLOCAL_MUTEBEGIN_EX(bits)	
 	#define GALLEN_DBGLOCAL_END() 

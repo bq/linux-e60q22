@@ -1922,6 +1922,54 @@ static void ntx_suspend_enter(void)
 		}
 	}
 #endif
+#if 0
+{
+       void __iomem *base = IO_ADDRESS(MX6Q_IOMUXC_BASE_ADDR);
+       unsigned int offset = 0x4C;
+       unsigned int addr = 0x20E0000;
+       unsigned int value;
+
+       for(offset=0x4C; offset <=0x884; offset+=4) {
+               value = __raw_readl( base + offset);
+               printk(KERN_DEBUG "addr %08x = %08x\n", addr+offset, value);
+       }
+
+       base = IO_ADDRESS(GPIO1_BASE_ADDR);
+       addr = 0x209C000;
+       for(offset=0; offset<=0x1C; offset+=4) {
+               value = __raw_readl( base + offset);
+               printk(KERN_DEBUG "addr %08x = %08x\n", addr+offset, value);
+       }
+
+    base = IO_ADDRESS(GPIO2_BASE_ADDR);
+    addr = 0x20A0000;
+    for(offset=0; offset<=0x1C; offset+=4) {
+        value = __raw_readl( base + offset);
+        printk(KERN_DEBUG "addr %08x = %08x\n", addr+offset, value);
+    }
+
+    base = IO_ADDRESS(GPIO3_BASE_ADDR);
+    addr = 0x20A4000;
+    for(offset=0; offset<=0x1C; offset+=4) {
+        value = __raw_readl( base + offset);
+        printk(KERN_DEBUG "addr %08x = %08x\n", addr+offset, value);
+    }
+
+    base = IO_ADDRESS(GPIO4_BASE_ADDR);
+    addr = 0x20A8000;
+    for(offset=0; offset<=0x1C; offset+=4) {
+        value = __raw_readl( base + offset);
+        printk(KERN_DEBUG "addr %08x = %08x\n", addr+offset, value);
+    }
+
+    base = IO_ADDRESS(GPIO5_BASE_ADDR);
+    addr = 0x20AC000;
+    for(offset=0; offset<=0x1C; offset+=4) {
+        value = __raw_readl( base + offset);
+        printk(KERN_DEBUG "addr %08x = %08x\n", addr+offset, value);
+    }
+}
+#endif
 }
 
 static void ntx_suspend_exit(void)
@@ -2099,7 +2147,15 @@ static void __init mx6_ntx_init(void)
 	imx6q_add_imx_i2c(1, &mx6_ntx_i2c1_data);
 	imx6q_add_imx_i2c(2, &mx6_ntx_i2c2_data);
 
-	i2c_register_board_info(0,&i2c_zforce_ir_touch_binfo,1);
+	if (4==gptHWCFG->m_val.bTouchType) {
+		// IR touch type 
+		i2c_register_board_info(0,&i2c_zforce_ir_touch_binfo,1);
+	}
+	/*else if(3==gptHWCFG->m_val.bTouchType) {
+		// C touch type .
+		i2c_register_board_info(0,&i2c_elan_touch_binfo,1);
+	}*/
+
 	i2c_register_board_info(2,&i2c_sysmp_msp430_binfo,1);
 
 	//i2c_register_board_info(0, mxc_i2c0_board_info,
