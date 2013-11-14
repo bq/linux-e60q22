@@ -1391,6 +1391,10 @@ void ntx_gpio_suspend (void)
 //			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
 //			gpio_direction_output (GPIO_IR_3V3_ON, 0);
 		}
+	} else {
+		if(gpio_get_value(gMX6SL_IR_TOUCH_INT) == 0)
+			printk("zforce has data waiting!\n");
+
 	}
 	gUart_ucr1 = __raw_readl(reg_uart1 + 0x80);
 	__raw_writel(0, reg_uart1 + 0x80);
