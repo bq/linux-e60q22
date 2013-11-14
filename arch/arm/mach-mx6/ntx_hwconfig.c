@@ -85,7 +85,7 @@
 
 
 const char gszNtxHwCfgMagic[]="HW CONFIG ";// hw config tool magic .
-const char gszNtxHwCfgVersion[]="v1.8"; // hw config tool version .
+const char gszNtxHwCfgVersion[]="v1.9"; // hw config tool version .
 
 
 // field values table ...
@@ -294,6 +294,7 @@ static HwConfigField gtHwConfigFields[] = {
 		(char **)gszFrontLightLEDrvA,FIELD_TYPE_IDXSTR,FIELD_FLAGS_HW},
 	{"v1.8","VCOM_10mV_HiByte",0,0,FIELD_TYPE_BYTE,FIELD_FLAGS_SW},
 	{"v1.8","VCOM_10mV_LoByte",0,0,FIELD_TYPE_BYTE,FIELD_FLAGS_SW},
+	{"v1.9","PCB_REV",0,0,FIELD_TYPE_BYTE,FIELD_FLAGS_HW},
 
 };
 

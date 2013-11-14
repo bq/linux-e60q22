@@ -199,8 +199,11 @@ void mxc_cpu_lp_set(enum mxc_cpu_pwr_mode mode)
 		if (stop_mode >= 2) {
 			/* dormant mode, need to power off the arm core */
 			__raw_writel(0x1, gpc_base + GPC_PGC_CPU_PDN_OFFSET);
+#if 0
 			if (cpu_is_mx6q() || cpu_is_mx6dl() && (4!=gptHWCFG->m_val.bRamType) ) 
-//			if (cpu_is_mx6q() || cpu_is_mx6dl() || cpu_is_mx6sl()  ) 
+#else
+			if( cpu_is_mx6q() || cpu_is_mx6dl() )
+#endif
 			{
 				/* If stop_mode_config is clear, then 2P5 will be off,
 				need to enable weak 2P5, as DDR IO need 2P5 as
@@ -224,7 +227,7 @@ void mxc_cpu_lp_set(enum mxc_cpu_pwr_mode mode)
 				}
 			} else {
 				if (stop_mode == 2) {
-#if 0
+#if 1
 					/* Disable VDDHIGH_IN to VDDSNVS_IN
 					  * power path, only used when VDDSNVS_IN
 					  * is powered by dedicated
@@ -236,12 +239,29 @@ void mxc_cpu_lp_set(enum mxc_cpu_pwr_mode mode)
 						HW_ANADIG_ANA_MISC0);
 #endif
 					/* Need to enable pull down if 2P5 is disabled */
-					anatop_val = __raw_readl(anatop_base +
-						HW_ANADIG_REG_2P5);
-					anatop_val |= (BM_ANADIG_REG_2P5_ENABLE_ILIMIT|
-						BM_ANADIG_REG_2P5_ENABLE_PULLDOWN);
-					__raw_writel(anatop_val, anatop_base +
-						HW_ANADIG_REG_2P5);
+						anatop_val = __raw_readl(anatop_base +
+							HW_ANADIG_REG_2P5);
+
+#if 1 ////[ 
+						//if (  (/* <= E60Q2XA14 */ 33==gptHWCFG->m_val.bPCB && gptHWCFG->m_val.bPCB_REV<=14 ) || 
+				 		//	   (/* <= E60Q3XA00 */ 36==gptHWCFG->m_val.bPCB && gptHWCFG->m_val.bPCB_REV<=0 ) ) 
+						{
+							//printk("%s<=E60Q2XA14|<=E60Q3XA00\n",__FUNCTION__);
+							/* Enable weak 2P5 linear regulator */
+							anatop_val |= BM_ANADIG_REG_2P5_ENABLE_WEAK_LINREG|
+								BM_ANADIG_REG_2P5_ENABLE_ILIMIT;
+						}
+						//else
+#else //][
+						{
+						anatop_val |= (BM_ANADIG_REG_2P5_ENABLE_ILIMIT|
+							BM_ANADIG_REG_2P5_ENABLE_PULLDOWN);
+						}
+#endif //]
+
+						__raw_writel(anatop_val, anatop_base +
+							HW_ANADIG_REG_2P5);
+
 					anatop_val = __raw_readl(anatop_base +
 						HW_ANADIG_REG_1P1);
 					anatop_val |= BM_ANADIG_REG_1P1_ENABLE_ILIMIT;
