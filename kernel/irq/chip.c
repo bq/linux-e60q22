@@ -345,7 +345,6 @@ static void cond_unmask_irq(struct irq_desc *desc)
 void
 handle_level_irq(unsigned int irq, struct irq_desc *desc)
 {
-if(irq == 344) printk("home in %s\n", __func__);
 	raw_spin_lock(&desc->lock);
 	mask_ack_irq(desc);
 
@@ -461,6 +460,7 @@ handle_edge_irq(unsigned int irq, struct irq_desc *desc)
 	 * we shouldn't process the IRQ. Mark it pending, handle
 	 * the necessary masking and go out
 	 */
+if (irq == 344) printk("disabled %d, in_progress %d, desc-action %d\n", irqd_irq_disabled(&desc->irq_data), irqd_irq_inprogress(&desc->irq_data), !!desc->action);
 	if (unlikely(irqd_irq_disabled(&desc->irq_data) ||
 		     irqd_irq_inprogress(&desc->irq_data) || !desc->action)) {
 		if (!irq_check_poll(desc)) {

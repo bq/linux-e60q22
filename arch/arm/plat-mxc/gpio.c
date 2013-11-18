@@ -76,6 +76,8 @@ static void gpio_mask_irq(struct irq_data *d)
 {
 	u32 gpio = irq_to_gpio(d->irq);
 if (d->irq == 344) printk("irq-debug: %s\n", __func__);
+if (d->irq == 344) dump_stack();
+if (d->irq == 344) return;
 	_set_gpio_irqenable(&mxc_gpio_ports[gpio / 32], gpio & 0x1f, 0);
 if (d->irq == 344) printk("irq-debug: %s done\n", __func__);
 }
@@ -89,6 +91,8 @@ if (d->irq == 344) printk("irq-debug: %s done\n", __func__);
 }
 
 static int mxc_gpio_get(struct gpio_chip *chip, unsigned offset);
+
+static int home_is_set;
 
 static int gpio_set_irq_type(struct irq_data *d, u32 type)
 {
@@ -128,11 +132,16 @@ if (d->irq == 344) printk("irq-debug: %s\n", __func__);
 		return -EINVAL;
 	}
 
+//if (d->irq != 344) {
 	/* set the correct irq handler */
 	if (type & (IRQ_TYPE_LEVEL_LOW | IRQ_TYPE_LEVEL_HIGH))
 		irq_set_handler(d->irq, handle_level_irq);
 	else if (type & IRQ_TYPE_EDGE_BOTH)
 		irq_set_handler(d->irq, handle_edge_irq);
+/*} else if (!home_is_set) {
+	irq_set_handler(d->irq, handle_edge_irq);
+	home_is_set = 1;
+}*/
 
 	reg += GPIO_ICR1 + ((gpio & 0x10) >> 2); /* lower or upper register */
 	bit = gpio & 0xf;
