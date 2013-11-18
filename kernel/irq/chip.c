@@ -345,6 +345,7 @@ static void cond_unmask_irq(struct irq_desc *desc)
 void
 handle_level_irq(unsigned int irq, struct irq_desc *desc)
 {
+if(irq == 344) printk("home in %s\n", __func__);
 	raw_spin_lock(&desc->lock);
 	mask_ack_irq(desc);
 
@@ -593,6 +594,17 @@ __irq_set_handler(unsigned int irq, irq_flow_handler_t handle, int is_chained,
 	}
 	desc->handle_irq = handle;
 	desc->name = name;
+if (irq == 344) {
+	printk("%s, name %s, handler:", __func__, name);
+	if(handle == handle_edge_irq)
+		printk("handle_edge_irq\n");
+	else if(handle == handle_level_irq) {
+		printk("handle_level_irq\n");
+		dump_stack();
+	}
+	else
+		printk("other handler\n");
+}
 
 	if (handle != handle_bad_irq && is_chained) {
 		irq_settings_set_noprobe(desc);
