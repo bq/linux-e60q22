@@ -67,30 +67,22 @@ static void _set_gpio_irqenable(struct mxc_gpio_port *port, u32 index,
 static void gpio_ack_irq(struct irq_data *d)
 {
 	u32 gpio = irq_to_gpio(d->irq);
-if (d->irq == 344) printk("irq-debug: %s\n", __func__);
 	_clear_gpio_irqstatus(&mxc_gpio_ports[gpio / 32], gpio & 0x1f);
-if (d->irq == 344) printk("irq-debug: %s done\n", __func__);
 }
 
 static void gpio_mask_irq(struct irq_data *d)
 {
 	u32 gpio = irq_to_gpio(d->irq);
-if (d->irq == 344) printk("irq-debug: %s\n", __func__);
 	_set_gpio_irqenable(&mxc_gpio_ports[gpio / 32], gpio & 0x1f, 0);
-if (d->irq == 344) printk("irq-debug: %s done\n", __func__);
 }
 
 static void gpio_unmask_irq(struct irq_data *d)
 {
 	u32 gpio = irq_to_gpio(d->irq);
-if (d->irq == 344) printk("irq-debug: %s\n", __func__);
 	_set_gpio_irqenable(&mxc_gpio_ports[gpio / 32], gpio & 0x1f, 1);
-if (d->irq == 344) printk("irq-debug: %s done\n", __func__);
 }
 
 static int mxc_gpio_get(struct gpio_chip *chip, unsigned offset);
-
-static int home_is_set;
 
 static int gpio_set_irq_type(struct irq_data *d, u32 type)
 {
@@ -100,7 +92,6 @@ static int gpio_set_irq_type(struct irq_data *d, u32 type)
 	int edge;
 	void __iomem *reg = port->base;
 
-if (d->irq == 344) printk("irq-debug: %s\n", __func__);
 	port->both_edges &= ~(1 << (gpio & 31));
 	switch (type) {
 	case IRQ_TYPE_EDGE_RISING:
@@ -130,16 +121,10 @@ if (d->irq == 344) printk("irq-debug: %s\n", __func__);
 		return -EINVAL;
 	}
 
-//if (d->irq != 344) {
-	/* set the correct irq handler */
 	if (type & (IRQ_TYPE_LEVEL_LOW | IRQ_TYPE_LEVEL_HIGH))
 		irq_set_handler(d->irq, handle_level_irq);
 	else if (type & IRQ_TYPE_EDGE_BOTH)
 		irq_set_handler(d->irq, handle_edge_irq);
-/*} else if (!home_is_set) {
-	irq_set_handler(d->irq, handle_edge_irq);
-	home_is_set = 1;
-}*/
 
 	reg += GPIO_ICR1 + ((gpio & 0x10) >> 2); /* lower or upper register */
 	bit = gpio & 0xf;
@@ -147,7 +132,6 @@ if (d->irq == 344) printk("irq-debug: %s\n", __func__);
 	__raw_writel(val | (edge << (bit << 1)), reg);
 	_clear_gpio_irqstatus(port, gpio & 0x1f);
 
-if (d->irq == 344) printk("irq-debug: %s done\n", __func__);
 	return 0;
 }
 
@@ -181,10 +165,8 @@ static void mxc_gpio_irq_handler(struct mxc_gpio_port *port, u32 irq_stat)
 {
 	u32 gpio_irq_no_base = port->virtual_irq_start;
 
-if (gpio_irq_no_base >= 320 && gpio_irq_no_base <= 350) printk("%s, %lu\n", __func__, gpio_irq_no_base);
 	while (irq_stat != 0) {
 		int irqoffset = fls(irq_stat) - 1;
-if (gpio_irq_no_base + irqoffset == 344) printk("irq-debug: %s home found\n", __func__);
 
 		if (port->both_edges & (1 << irqoffset))
 			mxc_flip_edge(port, irqoffset);
@@ -192,9 +174,7 @@ if (gpio_irq_no_base + irqoffset == 344) printk("irq-debug: %s home found\n", __
 		generic_handle_irq(gpio_irq_no_base + irqoffset);
 
 		irq_stat &= ~(1 << irqoffset);
-if (gpio_irq_no_base + irqoffset == 344) printk("irq-debug: %s home found done\n", __func__);
 	}
-if (gpio_irq_no_base >= 320 && gpio_irq_no_base <= 350) printk("%s done\n", __func__);
 }
 
 /* MX1 and MX3 has one interrupt *per* gpio port */

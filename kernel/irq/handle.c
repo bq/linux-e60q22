@@ -169,22 +169,13 @@ irqreturn_t handle_irq_event(struct irq_desc *desc)
 	struct irqaction *action = desc->action;
 	irqreturn_t ret;
 
-if(desc->irq_data.irq == 344) printk("%s", __func__);
 	desc->istate &= ~IRQS_PENDING;
 	irqd_set(&desc->irq_data, IRQD_IRQ_INPROGRESS);
 	raw_spin_unlock(&desc->lock);
 
 	ret = handle_irq_event_percpu(desc, action);
 
-if (desc->irq_data.irq == 344) printk("%s before lock", __func__);
-/*if (desc->irq_data.irq == 344 && raw_spin_is_locked(&desc->lock)) {
-	printk("!!! home-key irq-lock is already locked...\n");
-	irqd_clear(&desc->irq_data, IRQD_IRQ_INPROGRESS);
-	return ret;
-}*/
-
 	raw_spin_lock(&desc->lock);
 	irqd_clear(&desc->irq_data, IRQD_IRQ_INPROGRESS);
-if(desc->irq_data.irq == 344) printk("... done\n");
 	return ret;
 }
