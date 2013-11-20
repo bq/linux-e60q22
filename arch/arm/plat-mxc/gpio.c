@@ -76,8 +76,6 @@ static void gpio_mask_irq(struct irq_data *d)
 {
 	u32 gpio = irq_to_gpio(d->irq);
 if (d->irq == 344) printk("irq-debug: %s\n", __func__);
-if (d->irq == 344) dump_stack();
-if (d->irq == 344) return;
 	_set_gpio_irqenable(&mxc_gpio_ports[gpio / 32], gpio & 0x1f, 0);
 if (d->irq == 344) printk("irq-debug: %s done\n", __func__);
 }

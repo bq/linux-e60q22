@@ -94,6 +94,12 @@ void resume_device_irqs(void)
 }
 EXPORT_SYMBOL_GPL(resume_device_irqs);
 
+void recover_early_irqs(void)
+{
+	resume_irqs(true);
+}
+EXPORT_SYMBOL_GPL(recover_early_irqs);
+
 /**
  * check_wakeup_irqs - check if any wake-up interrupts are pending
  */
