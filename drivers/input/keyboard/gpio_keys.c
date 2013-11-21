@@ -642,9 +642,9 @@ static int gpio_keys_resume(struct device *dev)
 			disable_irq_wake(irq);
 		}
 
-//		gpio_keys_report_event(&ddata->data[i]);
+		gpio_keys_report_event(&ddata->data[i]);
 	}
-//	input_sync(ddata->input);
+	input_sync(ddata->input);
 
 	return 0;
 }

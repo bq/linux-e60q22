@@ -599,6 +599,20 @@ static void input_dev_release_keys(struct input_dev *dev)
 
 	if (is_event_supported(EV_KEY, dev->evbit, EV_MAX)) {
 		for (code = 0; code <= KEY_MAX; code++) {
+/*
+ * It seems the input-device resumes independently of the real device
+ * providing the data (i.e. gpio-keys). In this case it can happen, that
+ * gpio-keys is already awake and handling the press of the key, before
+ * input_dev_resume runs and invokes input_dev_release_keys.
+ * This then leads to a bouncing key, because resume reports the pressed
+ * key, this function then reports the key as released and the real
+ * interrupt handler of gpio-keys reports the key again as pressed.
+ * As no real solution seems to be easily available, simply block the release
+ * for the home-key here.
+ */
+if (code == 61 || code == 116)
+	continue;
+
 			if (is_event_supported(code, dev->keybit, KEY_MAX) &&
 			    __test_and_clear_bit(code, dev->key)) {
 				input_pass_event(dev, EV_KEY, code, 0);
