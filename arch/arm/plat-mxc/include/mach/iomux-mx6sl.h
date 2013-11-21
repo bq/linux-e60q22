@@ -1604,7 +1604,7 @@
 #define MX6SL_PAD_KEY_COL0__USDHC1_CD                                         \
 		IOMUX_PAD(0x0474, 0x016C, 4, 0x0828, 2, MX6SL_USDHC_PAD_CTRL)
 #define MX6SL_PAD_KEY_COL0__GPIO_3_24                                         \
-		IOMUX_PAD(0x0474, 0x016C, 5, 0x0000, 0, NO_PAD_I)
+		IOMUX_PAD(0x0474, 0x016C, 5, 0x0000, 0, MX6SL_KEYPAD_CTRL)
 #define MX6SL_PAD_KEY_COL0__MSHC_SCLK                                         \
 		IOMUX_PAD(0x0474, 0x016C, 6, 0x07E8, 0, NO_PAD_CTRL)
 #define MX6SL_PAD_KEY_COL0__TPSMP_HDATA_0                                     \
