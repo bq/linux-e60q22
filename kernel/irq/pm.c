@@ -66,7 +66,14 @@ static void resume_irqs(bool want_early)
  */
 static void irq_pm_syscore_resume(void)
 {
+	struct irq_desc *homedesc = irq_to_desc(344);
+
 	resume_irqs(true);
+
+	if (unlikely(irqd_irq_disabled(&homedesc->irq_data))) {
+		printk("home-interrupt was disabled, reenabling\n");
+		irq_enable(homedesc);
+	}
 }
 
 static struct syscore_ops irq_pm_syscore_ops = {

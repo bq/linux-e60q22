@@ -138,13 +138,11 @@ EXPORT_SYMBOL_GPL(irq_get_irq_data);
 
 static void irq_state_clr_disabled(struct irq_desc *desc)
 {
-if (desc->irq_data.irq == 344) dump_stack();
 	irqd_clear(&desc->irq_data, IRQD_IRQ_DISABLED);
 }
 
 static void irq_state_set_disabled(struct irq_desc *desc)
 {
-if (desc->irq_data.irq == 344) dump_stack();
 	irqd_set(&desc->irq_data, IRQD_IRQ_DISABLED);
 }
 
@@ -466,9 +464,13 @@ if (irq == 344) printk("disabled %d, in_progress %d, desc-action %d\n", irqd_irq
 	if (unlikely(irqd_irq_disabled(&desc->irq_data) ||
 		     irqd_irq_inprogress(&desc->irq_data) || !desc->action)) {
 		if (!irq_check_poll(desc)) {
-if (irq != 344) // only set other irqs pending, due to the race of the homebutton irq
+if (irq != 344) { // only set other irqs pending, due to the race of the homebutton irq
 			desc->istate |= IRQS_PENDING;
 			mask_ack_irq(desc);
+} else {
+		if (desc->irq_data.chip->irq_ack)
+			desc->irq_data.chip->irq_ack(&desc->irq_data);
+}
 			goto out_unlock;
 		}
 	}
