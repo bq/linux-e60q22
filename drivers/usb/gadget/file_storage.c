@@ -56,7 +56,7 @@
  * following protocols: RBC (0x01), ATAPI or SFF-8020i (0x02), QIC-157 (0c03),
  * UFI (0x04), SFF-8070i (0x05), and transparent SCSI (0x06), selected by
  * the optional "protocol" module parameter.  In addition, the default
- * Vendor ID, Product ID, and release number can be overridden.
+ * Vendor ID, Product ID, release number and serial number can be overridden.
  *
  * There is support for multiple logical units (LUNs), each of which has
  * its own backing file.  The number of LUNs can be set using the optional
@@ -89,10 +89,13 @@
  *				Required if "removable" is not set, names of
  *					the files or block devices used for
  *					backing storage
+ *	serial=HHHH...		Required serial number (string of hex chars)
  *	ro=b[,b...]		Default false, booleans for read-only access
  *	removable		Default false, boolean for removable media
  *	luns=N			Default N = number of filenames, number of
  *					LUNs to support
+ *	nofua=b[,b...]		Default false, booleans for ignore FUA flag
+ *					in SCSI WRITE(10,12) commands
  *	stall			Default determined according to the type of
  *					USB device controller (usually true),
  *					boolean to permit the driver to halt
@@ -110,13 +113,13 @@
  *					rounded down to a multiple of
  *					PAGE_CACHE_SIZE)
  *
- * If CONFIG_USB_FILE_STORAGE_TEST is not set, only the "file", "ro",
- * "removable", "luns", "stall", and "cdrom" options are available; default
- * values are used for everything else.
+ * If CONFIG_USB_FILE_STORAGE_TEST is not set, only the "file", "serial", "ro",
+ * "removable", "luns", "nofua", "stall", and "cdrom" options are available;
+ * default values are used for everything else.
  *
  * The pathnames of the backing files and the ro settings are available in
- * the attribute files "file" and "ro" in the lun<n> subdirectory of the
- * gadget's sysfs directory.  If the "removable" option is set, writing to
+ * the attribute files "file", "nofua", and "ro" in the lun<n> subdirectory of
+ * the gadget's sysfs directory.  If the "removable" option is set, writing to
  * these files will simulate ejecting/loading the medium (writing an empty
  * line means eject) and adjusting a write-enable tab.  Changes to the ro
  * setting are not allowed when the medium is loaded or if CD-ROM emulation
@@ -270,10 +273,10 @@
 
 #define DRIVER_DESC		"File-backed Storage Gadget"
 #define DRIVER_NAME		"g_file_storage"
-#define DRIVER_VERSION		"20 November 2008"
+#define DRIVER_VERSION		"1 September 2010"
 
 static       char fsg_string_manufacturer[64];
-// Joseph 20110601	static const char fsg_string_product[] = DRIVER_DESC;
+//static const char fsg_string_product[] = DRIVER_DESC;
 static const char fsg_string_product[40];
 static       char fsg_string_serial[13];
 static const char fsg_string_config[] = "Self-powered";
@@ -301,9 +304,12 @@ MODULE_LICENSE("Dual BSD/GPL");
 
 static struct {
 	char		*file[FSG_MAX_LUNS];
+	char		*serial;
 	int		ro[FSG_MAX_LUNS];
+	int		nofua[FSG_MAX_LUNS];
 	unsigned int	num_filenames;
 	unsigned int	num_ros;
+	unsigned int	num_nofuas;
 	unsigned int	nluns;
 
 	int		removable;
@@ -327,15 +333,10 @@ static struct {
 	char		*desc_p;
 	char		*desc_m;
 	char		*serial_no;
-
 } mod_data = {					// Default values
 	.transport_parm		= "BBB",
 	.protocol_parm		= "SCSI",
-#ifdef CONFIG_MXS_VBUS_CURRENT_DRAW
-	.removable		= 1,
-#else
 	.removable		= 0,
-#endif
 	.can_stall		= 1,
 	.cdrom			= 0,
 	.vendor			= FSG_VENDOR_ID,
@@ -346,6 +347,7 @@ static struct {
 	.vendor_id		= "Linux   ",
 	.product_id		= "File-Stor Gadget",
 	.serial_no		= "0123456789ABCDEF01",
+	
 	};
 
 
@@ -353,8 +355,15 @@ module_param_array_named(file, mod_data.file, charp, &mod_data.num_filenames,
 		S_IRUGO);
 MODULE_PARM_DESC(file, "names of backing files or devices");
 
+module_param_named(serial, mod_data.serial, charp, S_IRUGO);
+MODULE_PARM_DESC(serial, "USB serial number");
+
 module_param_array_named(ro, mod_data.ro, bool, &mod_data.num_ros, S_IRUGO);
 MODULE_PARM_DESC(ro, "true to force read-only");
+
+module_param_array_named(nofua, mod_data.nofua, bool, &mod_data.num_nofuas,
+		S_IRUGO);
+MODULE_PARM_DESC(nofua, "true to ignore SCSI WRITE(10,12) FUA bit");
 
 module_param_named(luns, mod_data.nluns, uint, S_IRUGO);
 MODULE_PARM_DESC(luns, "number of LUNs");
@@ -367,7 +376,6 @@ MODULE_PARM_DESC(stall, "false to prevent bulk stalls");
 
 module_param_named(cdrom, mod_data.cdrom, bool, S_IRUGO);
 MODULE_PARM_DESC(cdrom, "true to emulate cdrom instead of disk");
-
 
 /* In the non-TEST version, only the module parameters listed above
  * are available. */
@@ -407,6 +415,7 @@ MODULE_PARM_DESC(product, "USB descriptor P string");
 
 module_param_named(SN, mod_data.serial_no, charp, S_IRUGO);
 MODULE_PARM_DESC(product, "serial no string");
+
 
 #endif /* CONFIG_USB_FILE_STORAGE_TEST */
 
@@ -1324,7 +1333,8 @@ static int do_write(struct fsg_dev *fsg)
 			curlun->sense_data = SS_INVALID_FIELD_IN_CDB;
 			return -EINVAL;
 		}
-		if (fsg->cmnd[1] & 0x08) {	// FUA
+		/* FUA */
+		if (!curlun->nofua && (fsg->cmnd[1] & 0x08)) {
 			spin_lock(&curlun->filp->f_lock);
 			curlun->filp->f_flags |= O_DSYNC;
 			spin_unlock(&curlun->filp->f_lock);
@@ -1611,7 +1621,8 @@ static int do_inquiry(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 #else
 	static char vendor_id[] = "        ";
 	static char product_disk_id[] = "                ";
-#endif
+#endif	
+
 	static char product_cdrom_id[] = "File-CD Gadget  ";
 
 	if (!fsg->curlun) {		// Unsupported LUNs are okay
@@ -1630,7 +1641,8 @@ static int do_inquiry(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 	buf[3] = 2;		// SCSI-2 INQUIRY data format
 	buf[4] = 31;		// Additional length
 				// No special options
-	// Joseph 100315
+
+	// Joseph 100315 //[
 	if ( 8 > strlen (mod_data.vendor_id))
 		memcpy (vendor_id, mod_data.vendor_id, strlen (mod_data.vendor_id));
 	else
@@ -1640,7 +1652,8 @@ static int do_inquiry(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 		memcpy (product_disk_id, mod_data.product_id, strlen (mod_data.product_id));
 	else
 		memcpy (product_disk_id, mod_data.product_id, 16);
-		
+	//] Joseph 100315
+				 
 	sprintf(buf + 8, "%-8s%-16s%04x", vendor_id,
 			(mod_data.cdrom ? product_cdrom_id :
 				product_disk_id),
@@ -2380,7 +2393,7 @@ static int check_command(struct fsg_dev *fsg, int cmnd_size,
 		fsg->lun = lun;		// Use LUN from the command
 
 	/* Check the LUN */
-	if (fsg->lun >= 0 && fsg->lun < fsg->nluns) {
+	if (fsg->lun < fsg->nluns) {
 		fsg->curlun = curlun = &fsg->luns[fsg->lun];
 		if (fsg->cmnd[0] != REQUEST_SENSE) {
 			curlun->sense_data = SS_NO_SENSE;
@@ -2655,7 +2668,7 @@ static int do_scsi_command(struct fsg_dev *fsg)
 		fsg->data_size_from_cmnd = 0;
 		sprintf(unknown, "Unknown x%02x", fsg->cmnd[0]);
 		if ((reply = check_command(fsg, fsg->cmnd_size,
-				DATA_DIR_UNKNOWN, 0xff, 0, unknown)) == 0) {
+				DATA_DIR_UNKNOWN, ~0, 0, unknown)) == 0) {
 			fsg->curlun->sense_data = SS_INVALID_COMMAND;
 			reply = -EINVAL;
 		}
@@ -2685,13 +2698,7 @@ static int do_scsi_command(struct fsg_dev *fsg)
 static int received_cbw(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 {
 	struct usb_request		*req = bh->outreq;
-	struct fsg_bulk_cb_wrap	*cbw;
-
-	/* Basic check */
-	if (!req || !fsg)
-		return -EINVAL;
-
-	cbw = req->buf;
+	struct fsg_bulk_cb_wrap	*cbw = req->buf;
 
 	/* Was this a real packet?  Should it be ignored? */
 	if (req->status || test_bit(IGNORE_BULK_OUT, &fsg->atomic_bitflags))
@@ -2765,10 +2772,6 @@ static int get_next_command(struct fsg_dev *fsg)
 			if (rc)
 				return rc;
 		}
-
-		/* Basic check */
-		if (!fsg || !bh || !bh->outreq)
-			return -EINVAL;
 
 		/* Queue a request to read a Bulk-only CBW */
 		set_bulk_out_req_length(fsg, bh, USB_BULK_CB_WRAP_LEN);
@@ -3128,8 +3131,9 @@ static void handle_exception(struct fsg_dev *fsg)
 		break;
 
 	case FSG_STATE_DISCONNECT:
-		for (i = 0; i < fsg->nluns; ++i)
-			fsg_lun_fsync_sub(fsg->luns + i);
+		if (fsg->config != 0)
+			for (i = 0; i < fsg->nluns; ++i)
+				fsg_lun_fsync_sub(fsg->luns + i);
 		do_set_config(fsg, 0);		// Unconfigured state
 		break;
 
@@ -3217,12 +3221,12 @@ static int fsg_main_thread(void *fsg_)
 	complete_and_exit(&fsg->thread_notifier, 0);
 }
 
-
 /*-------------------------------------------------------------------------*/
 
 
 /* The write permissions and store_xxx pointers are set in fsg_bind() */
 static DEVICE_ATTR(ro, 0444, fsg_show_ro, NULL);
+static DEVICE_ATTR(nofua, 0644, fsg_show_nofua, NULL);
 static DEVICE_ATTR(file, 0444, fsg_show_file, NULL);
 
 
@@ -3268,6 +3272,7 @@ static void /* __init_or_exit */ fsg_unbind(struct usb_gadget *gadget)
 	for (i = 0; i < fsg->nluns; ++i) {
 		curlun = &fsg->luns[i];
 		if (curlun->registered) {
+			device_remove_file(&curlun->dev, &dev_attr_nofua);
 			device_remove_file(&curlun->dev, &dev_attr_ro);
 			device_remove_file(&curlun->dev, &dev_attr_file);
 			fsg_lun_close(curlun);
@@ -3323,7 +3328,7 @@ static int __init check_parameters(struct fsg_dev *fsg)
 				fsg->gadget->name);
 			mod_data.release = 0x0399;
 		}
-#endif
+#endif //] Joseph 20100903 for Calibre
 	}
 
 	prot = simple_strtol(mod_data.protocol_parm, NULL, 0);
@@ -3387,14 +3392,51 @@ static int __init check_parameters(struct fsg_dev *fsg)
 		ERROR(fsg, "invalid buflen\n");
 		return -ETOOSMALL;
 	}
+
 #endif /* CONFIG_USB_FILE_STORAGE_TEST */
+
+	/* Serial string handling.
+	 * On a real device, the serial string would be loaded
+	 * from permanent storage. */
+	if (mod_data.serial) {
+		const char *ch;
+		unsigned len = 0;
+
+		/* Sanity check :
+		 * The CB[I] specification limits the serial string to
+		 * 12 uppercase hexadecimal characters.
+		 * BBB need at least 12 uppercase hexadecimal characters,
+		 * with a maximum of 126. */
+		for (ch = mod_data.serial; *ch; ++ch) {
+			++len;
+			if ((*ch < '0' || *ch > '9') &&
+			    (*ch < 'A' || *ch > 'F')) { /* not uppercase hex */
+				WARNING(fsg,
+					"Invalid serial string character: %c\n",
+					*ch);
+				goto no_serial;
+			}
+		}
+		if (len > 126 ||
+		    (mod_data.transport_type == USB_PR_BULK && len < 12) ||
+		    (mod_data.transport_type != USB_PR_BULK && len > 12)) {
+			WARNING(fsg, "Invalid serial string length!\n");
+			goto no_serial;
+		}
+		fsg_strings[FSG_STRING_SERIAL - 1].s = mod_data.serial;
+	} else {
+		WARNING(fsg, "No serial-number string provided!\n");
+ no_serial:
+		device_desc.iSerialNumber = 0;
+	}
 
 	return 0;
 }
 #ifdef CONFIG_FSL_UTP
 #include "fsl_updater.c"
 #endif
-static int __init fsg_bind(struct usb_gadget *gadget)
+
+static int __ref fsg_bind(struct usb_gadget *gadget)
 {
 	struct fsg_dev		*fsg = the_fsg;
 	int			rc;
@@ -3421,6 +3463,9 @@ static int __init fsg_bind(struct usb_gadget *gadget)
 		}
 	}
 
+	/* Only for removable media? */
+	dev_attr_nofua.attr.mode = 0644;
+	dev_attr_nofua.store = fsg_store_nofua;
 #ifdef CONFIG_FSL_UTP
 	utp_init(fsg);
 #endif
@@ -3450,6 +3495,7 @@ static int __init fsg_bind(struct usb_gadget *gadget)
 		curlun->ro = mod_data.cdrom || mod_data.ro[i];
 		curlun->initially_ro = curlun->ro;
 		curlun->removable = mod_data.removable;
+		curlun->nofua = mod_data.nofua[i];
 		curlun->dev.release = lun_release;
 		curlun->dev.parent = &gadget->dev;
 		curlun->dev.driver = &fsg_driver.driver;
@@ -3457,23 +3503,28 @@ static int __init fsg_bind(struct usb_gadget *gadget)
 		dev_set_name(&curlun->dev,"%s-lun%d",
 			     dev_name(&gadget->dev), i);
 
-		if ((rc = device_register(&curlun->dev)) != 0) {
+		kref_get(&fsg->ref);
+		rc = device_register(&curlun->dev);
+		if (rc) {
 			INFO(fsg, "failed to register LUN%d: %d\n", i, rc);
-			goto out;
-		}
-		if ((rc = device_create_file(&curlun->dev,
-					&dev_attr_ro)) != 0 ||
-				(rc = device_create_file(&curlun->dev,
-					&dev_attr_file)) != 0) {
-			device_unregister(&curlun->dev);
+			put_device(&curlun->dev);
 			goto out;
 		}
 		curlun->registered = 1;
-		kref_get(&fsg->ref);
+
+		rc = device_create_file(&curlun->dev, &dev_attr_ro);
+		if (rc)
+			goto out;
+		rc = device_create_file(&curlun->dev, &dev_attr_nofua);
+		if (rc)
+			goto out;
+		rc = device_create_file(&curlun->dev, &dev_attr_file);
+		if (rc)
+			goto out;
 
 		if (mod_data.file[i] && *mod_data.file[i]) {
-			if ((rc = fsg_lun_open(curlun,
-					mod_data.file[i])) != 0)
+			rc = fsg_lun_open(curlun, mod_data.file[i]);
+			if (rc)
 				goto out;
 		} else if (!mod_data.removable) {
 			ERROR(fsg, "no file given for LUN%d\n", i);
@@ -3561,7 +3612,6 @@ static int __init fsg_bind(struct usb_gadget *gadget)
 
 	/* This should reflect the actual gadget power source */
 	usb_gadget_set_selfpowered(gadget);
-
 	if (mod_data.desc_p && strlen (mod_data.desc_p))// Joseph 20100921
 		strcpy (fsg_string_product, mod_data.desc_p);
 	else if (mod_data.product_id && strlen (mod_data.product_id))// Joseph 20100827
@@ -3592,8 +3642,9 @@ static int __init fsg_bind(struct usb_gadget *gadget)
 		sprintf(&fsg_string_serial[i], "%02X", c);
 	}
 	}
+	fsg_strings[FSG_STRING_SERIAL - 1].s = fsg_string_serial;
+	device_desc.iSerialNumber = FSG_STRING_SERIAL;
 	printk ("[%s-%d] mfg = %s , SN = %s\n",__func__, __LINE__, fsg_string_manufacturer, fsg_string_serial);
-	
 
 	fsg->thread_task = kthread_create(fsg_main_thread, fsg,
 			"file-storage-gadget");
@@ -3616,8 +3667,8 @@ static int __init fsg_bind(struct usb_gadget *gadget)
 				if (IS_ERR(p))
 					p = NULL;
 			}
-			LINFO(curlun, "ro=%d, file: %s\n",
-					curlun->ro, (p ? p : "(error)"));
+			LINFO(curlun, "ro=%d, nofua=%d, file: %s\n",
+			      curlun->ro, curlun->nofua, (p ? p : "(error)"));
 		}
 	}
 	kfree(pathbuf);
@@ -3679,7 +3730,6 @@ static struct usb_gadget_driver		fsg_driver = {
 	.speed		= USB_SPEED_FULL,
 #endif
 	.function	= (char *) fsg_string_product,
-	//.bind		= fsg_bind,
 	.unbind		= fsg_unbind,
 	.disconnect	= fsg_disconnect,
 	.setup		= fsg_setup,
@@ -3717,6 +3767,7 @@ static int __init fsg_init(void)
 {
 	int		rc;
 	struct fsg_dev	*fsg;
+
 	if ((rc = fsg_alloc()) != 0)
 		return rc;
 	fsg = the_fsg;
@@ -3724,12 +3775,8 @@ static int __init fsg_init(void)
 		kref_put(&fsg->ref, fsg_release);
 	return rc;
 }
+module_init(fsg_init);
 
-#ifdef CONFIG_MXS_VBUS_CURRENT_DRAW
-	fs_initcall(fsg_init);
-#else
-	module_init(fsg_init);
-#endif
 
 static void __exit fsg_cleanup(void)
 {
