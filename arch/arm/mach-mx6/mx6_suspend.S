@@ -211,6 +211,12 @@ wait_for_pll_lock:
 	cmp	r6, #0x80000000
 	bne	wait_for_pll_lock
 
+wait_for_pll2_lock:
+	ldr r6, [r1, #0x30]
+	and r6, r6, #0x80000000
+	cmp r6, #0x80000000
+	bne wait_for_pll2_lock
+
 	/* Set PLL1_sw_clk back to PLL1. */
 	ldr	r6, [r3, #0x0c]
 	bic	r6, r6, #0x4
