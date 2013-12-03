@@ -64,14 +64,15 @@
 #include <linux/gallen_dbg.h>
 
 //#define DO_NOT_POWEROFF				1
-#define NTX_WFM_MODE_OPTIMIZED 1
+//#define NTX_WFM_MODE_OPTIMIZED 1
 
+#define MX50_IOCTL_IF	1
 
 /*
  * Enable this define to have a default panel
  * loaded during driver initialization
  */
-//#define DEFAULT_PANEL_HW_INIT
+#define DEFAULT_PANEL_HW_INIT
 
 #define NUM_SCREENS_MIN	2
 
@@ -2128,6 +2129,10 @@ int mxc_epdc_fb_set_upd_scheme(u32 upd_scheme, struct fb_info *info)
 
 	GALLEN_DBGLOCAL_BEGIN();
 
+	/* If already set, nothing to do */
+	if (fb_data->upd_scheme == upd_scheme)
+		return 0;
+
 	dev_dbg(fb_data->dev, "Setting optimization level to %d\n", upd_scheme);
 
 	/*
@@ -3522,9 +3527,15 @@ int mxc_epdc_fb_send_update(struct mxcfb_update_data *upd_data,
 
 	GALLEN_DBGLOCAL_BEGIN();
 
+/*
+ * This change slows down consecutive screen updates a lot, as the next
+ * screen update first waits for the last one to finish.
+ * As this "feature" was not part of the imx5 variant of the driver,
+ * remove it again.
 	//Yian: patch from freescale HK. Peter, fixed the line noise on EPD
 	flush_cache_all();
 	outer_flush_all();
+*/
 
 	if (!fb_data->restrict_width) {
 		GALLEN_DBGLOCAL_ESC();
@@ -5920,7 +5931,7 @@ int __devinit mxc_epdc_fb_probe(struct platform_device *pdev)
 	fb_data->powering_down = false;
 	fb_data->wait_for_powerdown = false;
 	fb_data->updates_active = false;
-	fb_data->pwrdown_delay = 10;
+	fb_data->pwrdown_delay = 500;
 
 	fake_s1d13522_parse_epd_cmdline();
 

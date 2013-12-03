@@ -773,6 +773,8 @@ static irqreturn_t cd_irq(int irq, void *data)
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(sdhost);
 	struct pltfm_imx_data *imx_data = pltfm_host->priv;
 
+	pm_wakeup_event(sdhost->mmc->parent, 2000);
+
 	writel(0, sdhost->ioaddr + SDHCI_MIX_CTRL);
 	writel(0, sdhost->ioaddr + SDHCI_TUNE_CTRL_STATUS);
 
@@ -936,6 +938,9 @@ static int esdhc_pltfm_init(struct sdhci_host *host, struct sdhci_pltfm_data *pd
 		/* Now we have a working card_detect again */
 		host->quirks &= ~SDHCI_QUIRK_BROKEN_CARD_DETECTION;
 	}
+
+	/* the mmcs can be wakeup sources */
+	device_set_wakeup_capable(mmc_dev(host->mmc), true);
 
 #ifdef CONFIG_PM_RUNTIME
 	host->mmc->caps |= MMC_CAP_POWER_OFF_CARD;

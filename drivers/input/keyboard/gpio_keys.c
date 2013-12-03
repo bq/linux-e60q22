@@ -325,6 +325,8 @@ static void gpio_keys_report_event(struct gpio_button_data *bdata)
 	unsigned int type = button->type ?: EV_KEY;
 	int state = (gpio_get_value_cansleep(button->gpio) ? 1 : 0) ^ button->active_low;
 
+printk("%s: code: %d, type %d, state %d, isr_state %d\n", __func__, button->code, type, state, bdata->isr_state);
+
 	if (state != bdata->isr_state)	// do nothing if key bounced.
 		return;
 		
@@ -361,6 +363,8 @@ static irqreturn_t gpio_keys_isr(int irq, void *dev_id)
 
 	BUG_ON(irq != gpio_to_irq(button->gpio));
 
+printk("%s\n", __func__);
+	pm_wakeup_event(bdata->input->dev.parent, 2000);
 	bdata->isr_state = (gpio_get_value(button->gpio) ? 1 : 0) ^ button->active_low;
 	if (bdata->timer_debounce)
 		mod_timer(&bdata->timer,
@@ -668,6 +672,9 @@ static struct platform_driver gpio_keys_device_driver = {
 void gpiokeys_report_key(int isDown,__u16 wKeyCode)
 {
 	if (pindev) {
+		pm_wakeup_event(pindev->dev.parent, 2000);
+
+		printk("%s: code: %d, type %d, state %d\n", __func__, wKeyCode, EV_KEY, isDown);
 		input_event(pindev, EV_KEY, wKeyCode, isDown);
 		input_sync(pindev);
 	}

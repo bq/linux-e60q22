@@ -33,6 +33,7 @@
 #include <linux/spi/flash.h>
 #include <linux/i2c.h>
 #include <linux/i2c/pca953x.h>
+#include <linux/input/zforce_ts.h>
 #include <linux/ata.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/map.h>
@@ -784,9 +785,18 @@ static struct imxi2c_platform_data mx6_ntx_i2c2_data = {
 	.bitrate = 100000,
 };
 
+static struct zforce_ts_platdata zforce_ts_data = {
+	.x_max = 600,
+	.y_max = 800,
+//	.gpio_int = TOUCH_INT,
+//	.gpio_rst = IR_TOUCH_RST,
+};
+
 static struct i2c_board_info i2c_zforce_ir_touch_binfo = {
-	.type = "zforce-ir-touch",
+//	.type = "zforce-ir-touch",
+	.type = "zforce-ts",
 	.addr = 0x50,
+	.platform_data = &zforce_ts_data,
  	//.platform_data = MX6SL_IR_TOUCH_INT,
  	//.irq = gpio_to_irq(MX6SL_IR_TOUCH_INT),
 };
@@ -1650,11 +1660,11 @@ static struct platform_device lcd_wvga_device = {
 }
 
 static struct gpio_keys_button gpio_key_matrix_FL[] = {
-	GPIO_BUTTON(GPIO_KB_ROW0, 90, 1, "front_light", 1, 50),			// Front light
+//	GPIO_BUTTON(GPIO_KB_ROW0, 90, 1, "front_light", 1, 50),			// Front light
 };
 
 static struct gpio_keys_button gpio_key_HOME_FL[] = {
-	GPIO_BUTTON(GPIO_KB_COL1, 90, 1, "front_light", 1, 50),			// Front light
+//	GPIO_BUTTON(GPIO_KB_COL1, 90, 1, "front_light", 1, 50),			// Front light
 	GPIO_BUTTON(GPIO_KB_COL0, 61, 1, "home", 1, 50),			// home
 };
 
@@ -1681,7 +1691,7 @@ static struct platform_device ntx_gpio_key_device = {
 
 
 static int mx6sl_ntx_keymap[] = {
-	KEY(0, 0, 90),
+//	KEY(0, 0, 90),
 	KEY(0, 1, KEY_POWER),
 	KEY(0, 2, KEY_H),
 	KEY(0, 3, KEY_F1),
@@ -2042,8 +2052,12 @@ static void ntx_gpio_init(void)
 #endif
 	}
 
- 	i2c_zforce_ir_touch_binfo.platform_data = gMX6SL_IR_TOUCH_INT;
- 	i2c_zforce_ir_touch_binfo.irq = gpio_to_irq(gMX6SL_IR_TOUCH_INT);
+
+// 	i2c_zforce_ir_touch_binfo.platform_data = gMX6SL_IR_TOUCH_INT;
+	i2c_zforce_ir_touch_binfo.irq = gpio_to_irq(gMX6SL_IR_TOUCH_INT);
+
+	zforce_ts_data.gpio_int = gMX6SL_IR_TOUCH_INT;
+	zforce_ts_data.gpio_rst = gMX6SL_IR_TOUCH_RST;
 
 	i2c_sysmp_msp430_binfo.irq = gpio_to_irq(gMX6SL_MSP_INT);
 
@@ -2080,11 +2094,11 @@ static void ntx_gpio_init(void)
 	gpio_request (gMX6SL_PWR_SW, "MX6SL_PWR_SW");
 	gpio_direction_input (gMX6SL_PWR_SW);
 	
-	gpio_request (gMX6SL_IR_TOUCH_INT, "MX6SL_IR_TOUCH_INT");
-	gpio_direction_input (gMX6SL_IR_TOUCH_INT);
+//	gpio_request (gMX6SL_IR_TOUCH_INT, "MX6SL_IR_TOUCH_INT");
+//	gpio_direction_input (gMX6SL_IR_TOUCH_INT);
 	
-	gpio_request (gMX6SL_IR_TOUCH_RST, "MX6SL_IR_TOUCH_RST");
-	gpio_direction_input (gMX6SL_IR_TOUCH_RST);
+//	gpio_request (gMX6SL_IR_TOUCH_RST, "MX6SL_IR_TOUCH_RST");
+//	gpio_direction_input (gMX6SL_IR_TOUCH_RST);
 	
 	gpio_request (gMX6SL_HALL_EN, "MX6SL_HALL_EN");
 	gpio_direction_input (gMX6SL_HALL_EN);
@@ -2142,6 +2156,24 @@ static void __init mx6_ntx_init(void)
 	pu_reg_id = mx6sl_ntx_dvfscore_data.pu_id;
 	mx6_cpu_regulator_init();
 #endif
+
+	if(1==gptHWCFG->m_val.bDisplayResolution) {
+		// 1024x758 .
+		zforce_ts_data.x_max = 758;
+		zforce_ts_data.y_max = 1024;
+	} else if(2==gptHWCFG->m_val.bDisplayResolution) {
+		// 1024x768
+		zforce_ts_data.x_max = 768;
+		zforce_ts_data.y_max = 1024;
+	} else if(3==gptHWCFG->m_val.bDisplayResolution) {
+		// 1440x1080
+		zforce_ts_data.x_max = 1080;
+		zforce_ts_data.y_max = 1440;
+	} else {
+		// 800x600 
+		zforce_ts_data.x_max = 600;
+		zforce_ts_data.y_max = 800;
+	}
 
 	imx6q_add_imx_i2c(0, &mx6_ntx_i2c0_data);
 	imx6q_add_imx_i2c(1, &mx6_ntx_i2c1_data);

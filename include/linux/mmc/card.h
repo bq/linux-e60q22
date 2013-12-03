@@ -182,6 +182,7 @@ struct mmc_card {
 #define MMC_STATE_HIGHSPEED_DDR (1<<4)		/* card is in high speed mode */
 #define MMC_STATE_ULTRAHIGHSPEED (1<<5)		/* card is in ultra high speed mode */
 #define MMC_CARD_SDXC		(1<<6)		/* card is SDXC */
+#define MMC_CARD_REMOVED	(1<<7)		/* card has been removed */
 #define MMC_STATE_SD_SDR50	(1<<5)		/* card is in sdr50 mode */
 #define MMC_STATE_SD_SDR104	(1<<6)		/* card is in sdr104 mode */
 #define MMC_STATE_SD_DDR50	(1<<7)		/* card is in ddr50 mode */
@@ -387,6 +388,8 @@ static inline int mmc_card_nonstd_func_interface(const struct mmc_card *c)
 
 #define mmc_card_name(c)	((c)->cid.prod_name)
 #define mmc_card_id(c)		(dev_name(&(c)->dev))
+#define mmc_card_removed(c)	((c) && ((c)->state & MMC_CARD_REMOVED))
+#define mmc_card_set_removed(c) ((c)->state |= MMC_CARD_REMOVED)
 
 #define mmc_dev_to_card(d)	container_of(d, struct mmc_card, dev)
 

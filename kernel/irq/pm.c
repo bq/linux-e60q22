@@ -66,7 +66,14 @@ static void resume_irqs(bool want_early)
  */
 static void irq_pm_syscore_resume(void)
 {
+	struct irq_desc *homedesc = irq_to_desc(344);
+
 	resume_irqs(true);
+
+	if (unlikely(irqd_irq_disabled(&homedesc->irq_data))) {
+		printk("home-interrupt was disabled, reenabling\n");
+		irq_enable(homedesc);
+	}
 }
 
 static struct syscore_ops irq_pm_syscore_ops = {
@@ -94,6 +101,12 @@ void resume_device_irqs(void)
 }
 EXPORT_SYMBOL_GPL(resume_device_irqs);
 
+void recover_early_irqs(void)
+{
+	resume_irqs(true);
+}
+EXPORT_SYMBOL_GPL(recover_early_irqs);
+
 /**
  * check_wakeup_irqs - check if any wake-up interrupts are pending
  */
@@ -103,8 +116,13 @@ int check_wakeup_irqs(void)
 	int irq;
 
 	for_each_irq_desc(irq, desc) {
+		/*
+		 * Only interrupts which are marked as wakeup source
+		 * and have not been disabled before the suspend check
+		 * can abort suspend.
+		 */
 		if (irqd_is_wakeup_set(&desc->irq_data)) {
-			if (desc->istate & IRQS_PENDING)
+			if (desc->depth == 1 && desc->istate & IRQS_PENDING)
 				return -EBUSY;
 			continue;
 		}

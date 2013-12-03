@@ -114,6 +114,9 @@
 #define CM_FRONT_LIGHT_AVAILABLE	242
 #define CM_FRONT_LIGHT_DUTY		243
 #define CM_FRONT_LIGHT_FREQUENCY	244
+#define CM_FRONT_LIGHT_SLEEP		245
+
+#define CM_POWER_KEY_RAW		250
 
 #define CM_GET_KEYS				107
 
@@ -476,6 +479,7 @@ static int  ioctlDriver(struct file *filp, unsigned int command, unsigned long a
 	static unsigned int  last_FL_duty = 0;
 	static unsigned int  current_FL_freq = 0xFFFF;
   struct ebook_device_info info;  
+	int ret;
   	
 	if(!Driver_Count){
 		printk("pvi_io : do not open\n");
@@ -577,10 +581,12 @@ static int  ioctlDriver(struct file *filp, unsigned int command, unsigned long a
 		case CM_AUDIO_PWR:
 			break;
 		case CM_nLED:
+printk("%s, CM_nLED %d\n", __func__, p);
 			//printk("CM_nLED %d\n",p);
-			if (p)
+			if (!p) {
+				g_Cus_Ctrl_Led = 1;
 				gpio_direction_output (gMX6SL_ON_LED,0);
-			else
+			} else
 				gpio_direction_input (gMX6SL_ON_LED);
 			break;			
 			
@@ -636,6 +642,7 @@ static int  ioctlDriver(struct file *filp, unsigned int command, unsigned long a
 			break;
 			
 		case CM_LED_BLINK:
+printk("%s: CM_LED_BLINK %d\n", __func__, p);
 		    if (2==p) {
 				spin_lock(&led_flash_lock);
 		    	LED_Flash_Count++;
@@ -709,7 +716,15 @@ static int  ioctlDriver(struct file *filp, unsigned int command, unsigned long a
 			copy_to_user((void __user *)arg, &i, sizeof(unsigned long));
 			g_mxc_touch_triggered = 0;
       		break;	
-      		
+		case CM_POWER_KEY_RAW:
+/*			if ((6 == check_hardware_name()) || (2 == check_hardware_name())) 		// E60632 || E50602
+				i = (gpio_get_value (GPIO_PWR_SW))?1:0;	// POWER key
+			else
+				i = (gpio_get_value (GPIO_PWR_SW))?0:1;	// POWER key */
+			i = power_key_status();
+			copy_to_user((void __user *)arg, &i, sizeof(unsigned long));
+      		break;
+ 		
 		case CM_GET_WHEEL_KEY_STATUS:
 			i=0;
 			copy_to_user((void __user *)arg, &i, sizeof(unsigned long));
@@ -823,6 +838,39 @@ static int  ioctlDriver(struct file *filp, unsigned int command, unsigned long a
 				else if(last_FL_duty != 0){
 					printk ("FL PWM off command\n");
 					up_write_reg(0xA3, 0); 
+					schedule_delayed_work(&FL_off, 120);
+				}
+				last_FL_duty = p;
+			}
+			break;
+
+		case CM_FRONT_LIGHT_SLEEP:
+printk("front light sleep %d\n", p);
+			if(0!=gptHWCFG->m_val.bFrontLight)
+			{
+				if (p) {
+					if(delayed_work_pending(&FL_off)){
+						cancel_delayed_work_sync(&FL_off);
+					}
+					if (0 == last_FL_duty){
+						ret = up_write_reg (0xA1, 0xFF00);
+						if (ret < 0)
+							return -EINVAL;
+						ret = up_write_reg (0xA2, 0xFF00);
+						if (ret < 0)
+							return -EINVAL;
+						ret = up_write_reg (0xA3, 0x0100);
+						if (ret < 0)
+							return -EINVAL;
+
+						msleep(100);
+						gpio_direction_output(MX6SL_FL_EN,0);
+					}
+				}
+				else if(last_FL_duty != 0){
+					ret = up_write_reg(0xA3, 0); 
+					if (ret < 0)
+						return -EINVAL;
 					schedule_delayed_work(&FL_off, 120);
 				}
 				last_FL_duty = p;
@@ -1267,7 +1315,7 @@ static int gpio_initials(void)
 	{
 		/* Set power key as wakeup resource */
 		irq = gpio_to_irq(gMX6SL_PWR_SW);
-		ret = request_irq(irq, power_key_int, IRQF_TRIGGER_FALLING, "power_key", 0);
+		ret = request_irq(irq, power_key_int, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, "power_key", 0);
 		if (ret)
 			pr_info("register on-off key interrupt failed\n");
 		else
@@ -1275,9 +1323,9 @@ static int gpio_initials(void)
 	}
 	#endif //]GPIOFN_PWRKEY
 	
-	gpio_direction_output(gMX6SL_IR_TOUCH_RST, 0);
+/*	gpio_direction_output(gMX6SL_IR_TOUCH_RST, 0);
 	msleep(20);
-	gpio_direction_input(gMX6SL_IR_TOUCH_RST);
+	gpio_direction_input(gMX6SL_IR_TOUCH_RST); */
 
 	// MX6SL_FL_EN
 	if( 0 != gptHWCFG->m_val.bFrontLight ){
@@ -1496,6 +1544,8 @@ static unsigned int ntx_gpio_dir[5];
 static iomux_v3_cfg_t local_suspend_enter_pads[ARRAY_SIZE(ntx_suspend_enter_pads)];
 static iomux_v3_cfg_t ntx_suspend_exit_pads[ARRAY_SIZE(ntx_suspend_enter_pads)];
 
+static void __iomem *reg_uart1;
+
 void ntx_gpio_suspend (void)
 {
 	g_wakeup_by_alarm = 0;
@@ -1518,7 +1568,7 @@ void ntx_gpio_suspend (void)
 	
 		if(0x03!=gptHWCFG->m_val.bUIConfig) {
 			// turn off ir touch power.
-			gpio_direction_output (gMX6SL_IR_TOUCH_INT, 0);
+//			gpio_direction_output (gMX6SL_IR_TOUCH_INT, 0);
 			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__GPIO_3_12);
 			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SDA__GPIO_3_13);
 //			gpio_request(IMX_GPIO_NR(3, 12), "i2c1_scl");
@@ -1527,12 +1577,16 @@ void ntx_gpio_suspend (void)
 //			gpio_direction_output (IMX_GPIO_NR(3, 13), 0);
 
 		
-			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
-			gpio_direction_output (GPIO_IR_3V3_ON, 0);
+//			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
+//			gpio_direction_output (GPIO_IR_3V3_ON, 0);
 		}
+	} else {
+		if(gpio_get_value(gMX6SL_IR_TOUCH_INT) == 0)
+			printk("zforce has data waiting!\n");
+
 	}
-	gUart_ucr1 = __raw_readl(ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
-	__raw_writel(0, ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
+	gUart_ucr1 = __raw_readl(reg_uart1 + 0x80);
+	__raw_writel(0, reg_uart1 + 0x80);
 
 	if (gSleep_Mode_Suspend) {
 	    iomux_v3_cfg_t *p = local_suspend_enter_pads;
@@ -1675,23 +1729,23 @@ void ntx_gpio_resume (void)
 	    mxc_iomux_v3_setup_multiple_pads(ntx_suspend_exit_pads,
 	        ARRAY_SIZE(ntx_suspend_exit_pads));
 	}
-	__raw_writel(gUart_ucr1, ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K)+0x80);
+	__raw_writel(gUart_ucr1, reg_uart1 + 0x80);
 	if (gSleep_Mode_Suspend) {
 		if(0x03!=gptHWCFG->m_val.bUIConfig) {
 			// turn on ir touch power.
-			gpio_direction_output (GPIO_IR_3V3_ON, 1);
+//			gpio_direction_output (GPIO_IR_3V3_ON, 1);
 			gpio_free(IMX_GPIO_NR(3, 12));
 			gpio_free(IMX_GPIO_NR(3, 13));
 			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__I2C1_SCL);
 			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SDA__I2C1_SDA);
-			gpio_direction_input (gMX6SL_IR_TOUCH_INT);
-			mdelay (20);
-			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 1);
+//			gpio_direction_input (gMX6SL_IR_TOUCH_INT);
+//			mdelay (20);
+//			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 1);
 		}
 		else { // reset ir touch
-			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
-			mdelay (20);
-			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 1);
+//			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
+//			mdelay (20);
+//			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 1);
 		}
 	
 		gpio_free(IMX_GPIO_NR(3, 14));
@@ -1710,23 +1764,23 @@ void ntx_gpio_resume (void)
 	g_power_key_pressed = power_key_status();	// POWER key
 	if (g_power_key_pressed) 
 		mod_timer(&power_key_timer, jiffies + 1);
-
+/*
 	if (LED_conitnuous)
    		wake_up_interruptible(&LED_freeze_WaitQueue);
    	else {
 		ntx_led_blink (3, red_led_period);
 		ntx_led_blink (4, green_led_period);
 		ntx_led_blink (5, blue_led_period);
-	}
+	}*/
 #endif //]CONFIG_ANDROID
 }
 
-void ntx_gpio_touch_reset (void)
+/*void ntx_gpio_touch_reset (void)
 {
 	gpio_direction_output(gMX6SL_IR_TOUCH_RST, 0);
 	msleep (10);
 	gpio_direction_output(gMX6SL_IR_TOUCH_RST, 1);
-}
+}*/
 
 void ntx_msp430_i2c_force_release (void)
 {
@@ -1779,6 +1833,8 @@ static int __init initDriver(void)
 		printk("pvi_io: can't get major number\n");
 		return ret;
 	}
+
+reg_uart1 = ioremap(MX6SL_UART1_BASE_ADDR, SZ_4K);
 
     gpio_initials();
 

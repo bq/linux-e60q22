@@ -51,15 +51,26 @@ struct i2c_client *g_up_i2c_client;
 extern int g_wakeup_by_alarm;
 static struct ntx_up_dev_info *gNtxUpDevInfo;
 
+#define MAX_I2C_RETRY	10
+
 int up_read_reg(unsigned char reg)
 {
 	unsigned char buffer[10];
+	int ret, retry = 0;
 	struct i2c_msg msg[] = 
 	{
 		{.addr = g_up_i2c_client->addr, .flags = 0, .len = 1, .buf = &reg,}, 
 		{.addr = g_up_i2c_client->addr, .flags = I2C_M_RD, .len = 2, .buf = buffer,},
 	};
-	if(0 > i2c_transfer(g_up_i2c_client->adapter, msg, 2))
+
+	ret = i2c_transfer(g_up_i2c_client->adapter, msg, 2);
+	while (ret == -EBUSY && retry < MAX_I2C_RETRY) {
+		msleep(10);
+		retry++;
+		ret = i2c_transfer(g_up_i2c_client->adapter, msg, 2);
+	}
+
+	if(0 > ret)
 		printk ("[%s-%d] i2c_transfer failed...\n", __func__, __LINE__);
 	
 	return ((buffer[0]<<8) | buffer[1]);
@@ -68,6 +79,7 @@ int up_read_reg(unsigned char reg)
 int up_write_reg(unsigned char reg, int value)
 {
 	unsigned char buffer[10];
+	int ret, retry = 0;
 	struct i2c_msg msg[] = 
 	{
 		{.addr = g_up_i2c_client->addr, .flags = 0, .len = 3, .buf = buffer,}, 
@@ -75,8 +87,18 @@ int up_write_reg(unsigned char reg, int value)
 	buffer[0] = reg;
 	buffer[1] = value >> 8;
 	buffer[2] = value & 0xFF;
-	
-	return i2c_transfer(g_up_i2c_client->adapter, msg, 1);
+
+	ret = i2c_transfer(g_up_i2c_client->adapter, msg, 1);
+	while (ret == -EBUSY && retry < MAX_I2C_RETRY) {
+		ret = i2c_transfer(g_up_i2c_client->adapter, msg, 1);
+		msleep(10);
+		retry++;
+	}
+
+	if(ret < 0)
+		printk ("[%s-%d] i2c_transfer failed...\n", __func__, __LINE__);
+
+	return ret;
 }
 
 

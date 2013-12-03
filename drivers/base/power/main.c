@@ -813,6 +813,7 @@ static int device_suspend_noirq(struct device *dev, pm_message_t state)
  * Prevent device drivers from receiving interrupts and call the "noirq" suspend
  * handlers for all non-sysdev devices.
  */
+extern void recover_early_irqs(void);
 int dpm_suspend_noirq(pm_message_t state)
 {
 	ktime_t starttime = ktime_get();
@@ -839,10 +840,16 @@ int dpm_suspend_noirq(pm_message_t state)
 		put_device(dev);
 	}
 	mutex_unlock(&dpm_list_mtx);
-	if (error)
+	if (error) {
+		/**
+		 * suspend_device_irqs disables all irqs, but
+		 * dpm_resume_noirq only recovers the late irqs.
+		 */
+		recover_early_irqs();
 		dpm_resume_noirq(resume_event(state));
-	else
+	} else {
 		dpm_show_time(starttime, state, "late");
+	}
 	return error;
 }
 EXPORT_SYMBOL_GPL(dpm_suspend_noirq);
