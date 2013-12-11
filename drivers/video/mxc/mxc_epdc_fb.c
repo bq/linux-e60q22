@@ -2008,8 +2008,8 @@ void mxc_epdc_fb_set_waveform_modes(struct mxcfb_waveform_modes *modes,
 		(struct mxc_epdc_fb_data *)info:g_fb_data;
 
 
-	WARNING_MSG("%s(%d):%s() skip\n",__FILE__,__LINE__,__FUNCTION__);
-	return ;
+//	WARNING_MSG("%s(%d):%s() skip\n",__FILE__,__LINE__,__FUNCTION__);
+//	return ;
 
 	mutex_lock(&fb_data->queue_mutex);
 
