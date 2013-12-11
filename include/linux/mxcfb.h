@@ -108,6 +108,13 @@ struct mxcfb_alt_buffer_data {
 	struct mxcfb_rect alt_update_region;	/* region within buffer to update */
 };
 
+struct mxcfb_alt_buffer_data_old {
+	__u32 phys_addr;
+	__u32 width;	/* width of entire buffer */
+	__u32 height;	/* height of entire buffer */
+	struct mxcfb_rect alt_update_region;	/* region within buffer to update */
+};
+
 struct mxcfb_update_data {
 	struct mxcfb_rect update_region;
 	__u32 waveform_mode;
@@ -116,6 +123,16 @@ struct mxcfb_update_data {
 	int temp;
 	uint flags;
 	struct mxcfb_alt_buffer_data alt_buffer_data;
+};
+
+struct mxcfb_update_data_old {
+	struct mxcfb_rect update_region;
+	__u32 waveform_mode;
+	__u32 update_mode;
+	__u32 update_marker;
+	int temp;
+	uint flags;
+	struct mxcfb_alt_buffer_data_old alt_buffer_data;
 };
 
 struct mxcfb_update_marker_data {
@@ -139,6 +156,15 @@ struct mxcfb_waveform_modes {
 	int mode_reagld;
 	int mode_gl16;
 	int mode_a2;
+};
+
+struct mxcfb_waveform_modes_old {
+	int mode_init;
+	int mode_du;
+	int mode_gc4;
+	int mode_gc8;
+	int mode_gc16;
+	int mode_gc32;
 };
 
 /*
@@ -165,12 +191,15 @@ struct mxcfb_csc_matrix {
 
 /* IOCTLs for E-ink panel updates */
 #define MXCFB_SET_WAVEFORM_MODES	_IOW('F', 0x2B, struct mxcfb_waveform_modes)
+#define MXCFB_SET_WAVEFORM_MODES_OLD	_IOW('F', 0x2B, struct mxcfb_waveform_modes_old)
 #define MXCFB_SET_TEMPERATURE		_IOW('F', 0x2C, int32_t)
 #define MXCFB_SET_AUTO_UPDATE_MODE	_IOW('F', 0x2D, __u32)
 #define MXCFB_SEND_UPDATE		_IOW('F', 0x2E, struct mxcfb_update_data)
+#define MXCFB_SEND_UPDATE_OLD		_IOW('F', 0x2E, struct mxcfb_update_data_old)
 #ifdef MX50_IOCTL_IF//[
 #define MXCFB_WAIT_FOR_UPDATE_COMPLETE	_IOW('F', 0x2F, __u32)
 #define MXCFB_WAIT_FOR_UPDATE_COMPLETE2 _IOWR('F', 0x35, struct mxcfb_update_marker_data)
+#define MXCFB_WAIT_FOR_UPDATE_COMPLETE3 _IOWR('F', 0x2F, struct mxcfb_update_marker_data)
 #else //][!MX50_IOCTL_IF
 #define MXCFB_WAIT_FOR_UPDATE_COMPLETE _IOWR('F', 0x35, struct mxcfb_update_marker_data)
 #endif//] MX50_IOCTL_IF
