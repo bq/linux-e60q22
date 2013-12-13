@@ -1686,23 +1686,23 @@ void ntx_gpio_suspend (void)
 
 		base = IO_ADDRESS(GPIO1_BASE_ADDR);
 		ntx_gpio_dir[0] = __raw_readl(base+4);
-		__raw_writel( ntx_gpio_dir[0]&(~0xffffff80), base+4);
+//		__raw_writel( ntx_gpio_dir[0]&(~0xffffff80), base+4);
 
         base = IO_ADDRESS(GPIO2_BASE_ADDR);
         ntx_gpio_dir[1] = __raw_readl(base+4);
-        __raw_writel( ntx_gpio_dir[1]&(~0xffffffff), base+4);
+//        __raw_writel( ntx_gpio_dir[1]&(~0xffffffff), base+4);
 
         base = IO_ADDRESS(GPIO3_BASE_ADDR);
         ntx_gpio_dir[2] = __raw_readl(base+4);
-        __raw_writel( ntx_gpio_dir[2]&(~0xfffcffff), base+4);
+//        __raw_writel( ntx_gpio_dir[2]&(~0xfffcffff), base+4);
 
         base = IO_ADDRESS(GPIO4_BASE_ADDR);
         ntx_gpio_dir[3] = __raw_readl(base+4);
-        __raw_writel( ntx_gpio_dir[3]&(~0xdfffffff), base+4);
+//        __raw_writel( ntx_gpio_dir[3]&(~0xdfffffff), base+4);
 
         base = IO_ADDRESS(GPIO5_BASE_ADDR);
         ntx_gpio_dir[4] = __raw_readl(base+4);
-        __raw_writel( ntx_gpio_dir[4]&(~0x003fffff), base+4);
+//        __raw_writel( ntx_gpio_dir[4]&(~0x003fffff), base+4);
 	}
 }
 
