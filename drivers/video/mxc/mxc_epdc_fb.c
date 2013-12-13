@@ -2013,8 +2013,8 @@ void mxc_epdc_fb_set_waveform_modes(struct mxcfb_waveform_modes *modes,
 		(struct mxc_epdc_fb_data *)info:g_fb_data;
 
 
-	WARNING_MSG("%s(%d):%s() skip\n",__FILE__,__LINE__,__FUNCTION__);
-	return ;
+//	WARNING_MSG("%s(%d):%s() skip\n",__FILE__,__LINE__,__FUNCTION__);
+//	return ;
 
 	mutex_lock(&fb_data->queue_mutex);
 
@@ -3744,6 +3744,27 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			}
 			break;
 		}
+	case MXCFB_SET_WAVEFORM_MODES_OLD:
+		{
+			struct mxcfb_waveform_modes_old modes;
+			struct mxcfb_waveform_modes modes_new;
+			if (!copy_from_user(&modes, argp, sizeof(modes))) {
+				// we copy the modes manually from the old to the new data structure
+				modes_new.mode_init = modes.mode_init;
+				modes_new.mode_du = modes.mode_du;
+				modes_new.mode_gc4 = modes.mode_gc4;
+				modes_new.mode_gc8 = modes.mode_gc8;
+				modes_new.mode_gc16 = modes.mode_gc16;
+				modes_new.mode_gc32 = modes.mode_gc32;
+				modes_new.mode_reagl = 0;
+				modes_new.mode_reagld = 0;
+				modes_new.mode_gl16 = 0;
+				modes_new.mode_a2 = 0;
+				mxc_epdc_fb_set_waveform_modes(&modes_new, info);
+				ret = 0;
+			}
+			break;
+		}
 	case MXCFB_SET_TEMPERATURE:GALLEN_DBGLOCAL_RUNLOG(1);
 		//printk("\n==>skip MXCFB_SET_TEMPERATURE\n");ret=0;break;															 
 		{
@@ -3787,6 +3808,50 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 
 			break;
 		}
+	case MXCFB_SEND_UPDATE_OLD:
+		//printk("\n==> MXCFB_SEND_UPDATE_OLD\n");
+		{
+			struct mxcfb_update_data_old upd_data_old;
+			struct mxcfb_update_data upd_data;
+			if (!copy_from_user(&upd_data, argp,
+				sizeof(upd_data))) {
+
+				// set upd_data <- upd_data_old
+				memcpy(&upd_data_new.update_region, &upd_data_old.update_region, sizeof(upd_data_old.update_region));
+				upd_data.waveform_mode = upd_data_old.waveform_mode;
+				upd_data.update_mode = upd_data_old.update_mode;
+				upd_data.update_marker = upd_data_old.update_marker;
+				upd_data.temp = upd_data_old.temp;
+				upd_data.flags = upd_data_old.flags;
+				//
+				upd_data.alt_buffer_data.phys_addr = upd_data_old.alt_buffer_data.phys_addr;
+				upd_data.alt_buffer_data.width = upd_data_old.alt_buffer_data.width;
+				upd_data.alt_buffer_data.height = upd_data_old.alt_buffer_data.height;
+				upd_data.alt_buffer_data.alt_update_region = upd_data_old.alt_buffer_data.alt_update_region;
+
+				ret = mxc_epdc_fb_send_update(&upd_data, info);
+
+				// set upd_data_old <- upd_data
+				memcpy(&upd_data_old.update_region, &upd_data.update_region, sizeof(upd_data_old.update_region));
+				upd_data_old.waveform_mode = upd_data.waveform_mode;
+				upd_data_old.update_mode = upd_data.update_mode;
+				upd_data_old.update_marker = upd_data.update_marker;
+				upd_data_old.temp = upd_data.temp;
+				upd_data_old.flags = upd_data.flags;
+				//
+				upd_data_old.alt_buffer_data.phys_addr = upd_data.alt_buffer_data.phys_addr;
+				upd_data_old.alt_buffer_data.width = upd_data.alt_buffer_data.width;
+				upd_data_old.alt_buffer_data.height = upd_data.alt_buffer_data.height;
+				upd_data_old.alt_buffer_data.alt_update_region = upd_data.alt_buffer_data.alt_update_region;
+				if (ret == 0 && copy_to_user(argp, &upd_data_old,
+					sizeof(upd_data_old)))
+					ret = -EFAULT;
+			} else {
+				ret = -EFAULT;
+			}
+
+			break;
+		}
 
 #ifdef MX50_IOCTL_IF//[
 	case MXCFB_WAIT_FOR_UPDATE_COMPLETE:GALLEN_DBGLOCAL_RUNLOG(10);
@@ -3809,6 +3874,7 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 		}
 																			
 	case MXCFB_WAIT_FOR_UPDATE_COMPLETE2:GALLEN_DBGLOCAL_RUNLOG(5);
+	case MXCFB_WAIT_FOR_UPDATE_COMPLETE3:
 		printk("\n==> MXCFB_WAIT_FOR_UPDATE_COMPLETE2 mx50\n");
 #else//][!MX50_IOCTL_IF
 	case MXCFB_WAIT_FOR_UPDATE_COMPLETE:GALLEN_DBGLOCAL_RUNLOG(11);
@@ -3872,6 +3938,7 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 
 	default:GALLEN_DBGLOCAL_RUNLOG(9);
 		//printk("\n==>skip unkown fsl epd command %d\n",cmd);ret=0;break;
+		printk(KERN_ERR"\n==>skip unkown fsl epd command %x - %x %x %x\n",cmd, MXCFB_WAIT_FOR_UPDATE_COMPLETE, MXCFB_WAIT_FOR_UPDATE_COMPLETE2, MXCFB_WAIT_FOR_UPDATE_COMPLETE3);
 		ret = k_fake_s1d13522_ioctl(cmd,arg);
 		break;
 	}
