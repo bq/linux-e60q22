@@ -3817,7 +3817,7 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 				sizeof(upd_data))) {
 
 				// set upd_data <- upd_data_old
-				memcpy(&upd_data_new.update_region, &upd_data_old.update_region, sizeof(upd_data_old.update_region));
+				memcpy(&upd_data.update_region, &upd_data_old.update_region, sizeof(upd_data_old.update_region));
 				upd_data.waveform_mode = upd_data_old.waveform_mode;
 				upd_data.update_mode = upd_data_old.update_mode;
 				upd_data.update_marker = upd_data_old.update_marker;
