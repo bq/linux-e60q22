@@ -1702,7 +1702,12 @@ void ntx_gpio_suspend (void)
 
         base = IO_ADDRESS(GPIO5_BASE_ADDR);
         ntx_gpio_dir[4] = __raw_readl(base+4);
-//        __raw_writel( ntx_gpio_dir[4]&(~0x003fffff), base+4);
+/*        __raw_writel( ntx_gpio_dir[4]&(~0x003fffff), base+4);
+ * Don't reconfigure the zforce_rst pin GPIO(5, 9), as it gets put to
+ * sleep on its own during suspend and the rst line being still 1
+ * resumes the system when it gets reconfigured as input.
+ */
+          __raw_writel( ntx_gpio_dir[4]&(~0x003ffdff), base+4);
 	}
 }
 
