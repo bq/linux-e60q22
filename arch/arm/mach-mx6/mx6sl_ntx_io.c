@@ -1355,8 +1355,6 @@ static int gpio_initials(void)
 extern void __iomem *apll_base;
 unsigned long gUart_ucr1;
 
-static void __iomem *reg_uart1;
-
 static iomux_v3_cfg_t ntx_suspend_enter_pads[] = {
 	// I2C1,I2C2
 	MX6SL_PAD_I2C2_SCL__GPIO_3_14,
@@ -1546,6 +1544,8 @@ static unsigned int ntx_gpio_dir[5];
 static iomux_v3_cfg_t local_suspend_enter_pads[ARRAY_SIZE(ntx_suspend_enter_pads)];
 static iomux_v3_cfg_t ntx_suspend_exit_pads[ARRAY_SIZE(ntx_suspend_enter_pads)];
 
+static void __iomem *reg_uart1;
+
 void ntx_gpio_suspend (void)
 {
 	g_wakeup_by_alarm = 0;
@@ -1702,7 +1702,12 @@ void ntx_gpio_suspend (void)
 
         base = IO_ADDRESS(GPIO5_BASE_ADDR);
         ntx_gpio_dir[4] = __raw_readl(base+4);
-        __raw_writel( ntx_gpio_dir[4]&(~0x003fffff), base+4);
+/*        __raw_writel( ntx_gpio_dir[4]&(~0x003fffff), base+4);
+ * Don't reconfigure the zforce_rst pin GPIO(5, 9), as it gets put to
+ * sleep on its own during suspend and the rst line being still 1
+ * resumes the system when it gets reconfigured as input.
+ */
+          __raw_writel( ntx_gpio_dir[4]&(~0x003ffdff), base+4);
 	}
 }
 
