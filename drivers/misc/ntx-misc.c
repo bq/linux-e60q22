@@ -32,7 +32,7 @@
 #include <linux/i2c.h>
 #include <linux/irq.h>
 
-#include "ntx_hwconfig.h"
+#include "../../arch/arm/mach-mx6/ntx_hwconfig.h"
 #include "ntx-misc.h"
 
 #include "../../arch/arm/mach-mx6/board-mx6sl_ntx.h"

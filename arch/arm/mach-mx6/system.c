@@ -202,7 +202,7 @@ void mxc_cpu_lp_set(enum mxc_cpu_pwr_mode mode)
 #if 0
 			if (cpu_is_mx6q() || cpu_is_mx6dl() && (4!=gptHWCFG->m_val.bRamType) ) 
 #else
-			if( cpu_is_mx6q() || cpu_is_mx6dl() )
+			if( cpu_is_mx6q() || cpu_is_mx6dl() || cpu_is_mx6sl()  ) 
 #endif
 			{
 				/* If stop_mode_config is clear, then 2P5 will be off,
