@@ -720,8 +720,11 @@ exit:
 
 static void tps65185_pwrdwn_work_func(struct work_struct *work)
 {
+printk("%s: waiting for chmod_lock ...", __func__);
 	down(&gtTPS65185_DataA[0].chmod_lock);
+printk("ok\n");
 	_tps65185_pwrdwn();
+printk("%s: pwrdwn finished\n", __func__);
 	up(&gtTPS65185_DataA[0].chmod_lock);
 }
 
@@ -2088,7 +2091,10 @@ int tps65185_suspend(void)
 	if(delayed_work_pending(&gtPwrdwn_work_param.pwrdwn_work)) {
 		WARNING_MSG("pmic pwrdwn delay work pending !!\n");
 		//flush_delayed_work(&gtPwrdwn_work_param.pwrdwn_work);
-		tps65185_irqs_enable(1);
+
+		if (gSleep_Mode_Suspend)
+			tps65185_irqs_enable(1);
+
 		return -1;
 	}
 
