@@ -720,12 +720,14 @@ exit:
 
 static void tps65185_pwrdwn_work_func(struct work_struct *work)
 {
-printk("%s: waiting for chmod_lock ...", __func__);
+	pm_stay_awake(&gpI2C_clientA[0]->dev);
+printk("%s: waiting for chmod_lock ... ", __func__);
 	down(&gtTPS65185_DataA[0].chmod_lock);
-printk("ok\n");
+printk("[[ok]]\n");
 	_tps65185_pwrdwn();
 printk("%s: pwrdwn finished\n", __func__);
 	up(&gtTPS65185_DataA[0].chmod_lock);
+	pm_relax(&gpI2C_clientA[0]->dev);
 }
 
 
@@ -1029,6 +1031,8 @@ int tps65185_init(int iPort,int iEPDTimingType)
 			ERR_MSG("[Error] %s : TPS65185_RET_NEWDEVFAIL\n",__FUNCTION__);
 			return TPS65185_RET_NEWDEVFAIL;
 		}
+
+		device_init_wakeup(&gpI2C_clientA[iChipIdx]->dev, true);
 		printk("client%d@i2c%d ,addr=0x%x,name=%s\n",iChipIdx,iPort,
 			gpI2C_clientA[iChipIdx]->addr,gpI2C_clientA[iChipIdx]->name);
 
@@ -1461,6 +1465,7 @@ int tps65185_chg_mode(unsigned long *IO_pdwMode,int iIsWaitPwrOff)
 	int iRetryCnt;
 	unsigned long dwCurTick,dwTicks;
 	int iPoweringOn;
+	int ret;
 	//int irq_INT,irq_PG;
 
 	GALLEN_DBGLOCAL_BEGIN();
@@ -1473,10 +1478,13 @@ int tps65185_chg_mode(unsigned long *IO_pdwMode,int iIsWaitPwrOff)
 	//disable_irq(irq_INT);
 	//disable_irq(irq_PG);
 
+printk("%s: waiting for chmod_lock ... ", __func__);
 	down(&gtTPS65185_DataA[0].chmod_lock);
+printk("[[ok-%s]]\n", __func__);
 
 	dwCurrent_mode = gtTPS65185_DataA[0].dwCurrent_mode;
 	dwNewMode = *IO_pdwMode;
+printk("%s: mode %d -> %d\n", __func__, dwCurrent_mode, dwNewMode);
 
 	if(0==giIsTPS65185_inited) {
 		ERR_MSG("[Error] %s : tps65185 must be initialized first !\n",__FUNCTION__);
@@ -1522,6 +1530,19 @@ int tps65185_chg_mode(unsigned long *IO_pdwMode,int iIsWaitPwrOff)
 		}	
 		#endif
 
+		ret = work_busy(&gtPwrdwn_work_param.pwrdwn_work.work);
+		if (ret & WORK_BUSY_RUNNING) {
+			/* at this point the delayed pwrdwn function is actually
+			 * running, but we got the lock, which means the pwrdwn
+			 * is waiting for the lock and will block
+			 * cancel_delayed_work_sync indefinitely. Therefore
+			 * lift the semaphore again, to let pwrdwn-work finish.
+			 */
+			printk("%s: resolving possible deadlock with pwrdwn-work!\n", __func__);
+			up(&gtTPS65185_DataA[0].chmod_lock);
+			msleep(10);
+			down(&gtTPS65185_DataA[0].chmod_lock);
+		}
 		iChk = cancel_delayed_work_sync(&gtPwrdwn_work_param.pwrdwn_work);
 
 		//iNewWakeupState = 1;
@@ -1631,6 +1652,19 @@ int tps65185_chg_mode(unsigned long *IO_pdwMode,int iIsWaitPwrOff)
 
 			if(!delayed_work_pending(&gtPwrdwn_work_param.pwrdwn_work)) {
 				GALLEN_DBGLOCAL_RUNLOG(13);
+		ret = work_busy(&gtPwrdwn_work_param.pwrdwn_work.work);
+		if (ret & WORK_BUSY_RUNNING) {
+			/* at this point the delayed pwrdwn function is actually
+			 * running, but we got the lock, which means the pwrdwn
+			 * is waiting for the lock and will block
+			 * cancel_delayed_work_sync indefinitely. Therefore
+			 * lift the semaphore again, to let pwrdwn-work finish.
+			 */
+			printk("%s: resolving possible deadlock with pwrdwn-work!\n", __func__);
+			up(&gtTPS65185_DataA[0].chmod_lock);
+			msleep(10);
+			down(&gtTPS65185_DataA[0].chmod_lock);
+		}
 				iChk = cancel_delayed_work_sync(&gtPwrdwn_work_param.pwrdwn_work);
 				schedule_delayed_work(&gtPwrdwn_work_param.pwrdwn_work, TPS65185_PWROFFDELAYWORK_TICKS);
 			}
@@ -1702,6 +1736,19 @@ int tps65185_chg_mode(unsigned long *IO_pdwMode,int iIsWaitPwrOff)
 
 			if(!delayed_work_pending(&gtPwrdwn_work_param.pwrdwn_work)) {
 				GALLEN_DBGLOCAL_RUNLOG(16);
+		ret = work_busy(&gtPwrdwn_work_param.pwrdwn_work.work);
+		if (ret & WORK_BUSY_RUNNING) {
+			/* at this point the delayed pwrdwn function is actually
+			 * running, but we got the lock, which means the pwrdwn
+			 * is waiting for the lock and will block
+			 * cancel_delayed_work_sync indefinitely. Therefore
+			 * lift the semaphore again, to let pwrdwn-work finish.
+			 */
+			printk("%s: resolving possible deadlock with pwrdwn-work!\n", __func__);
+			up(&gtTPS65185_DataA[0].chmod_lock);
+			msleep(10);
+			down(&gtTPS65185_DataA[0].chmod_lock);
+		}
 				iChk = cancel_delayed_work_sync(&gtPwrdwn_work_param.pwrdwn_work);
 				schedule_delayed_work(&gtPwrdwn_work_param.pwrdwn_work, TPS65185_PWROFFDELAYWORK_TICKS);
 			}
@@ -1744,6 +1791,7 @@ exit:
 
 	GALLEN_DBGLOCAL_END();
 
+printk("%s: finished\n", __func__);
 	up(&gtTPS65185_DataA[0].chmod_lock);
 	//enable_irq(irq_PG);
 	//enable_irq(irq_INT);
