@@ -721,11 +721,11 @@ exit:
 static void tps65185_pwrdwn_work_func(struct work_struct *work)
 {
 	pm_stay_awake(&gpI2C_clientA[0]->dev);
-printk("%s: waiting for chmod_lock ... ", __func__);
+//printk("%s: waiting for chmod_lock ... ", __func__);
 	down(&gtTPS65185_DataA[0].chmod_lock);
-printk("[[ok]]\n");
+//printk("[[ok]]\n");
 	_tps65185_pwrdwn();
-printk("%s: pwrdwn finished\n", __func__);
+//printk("%s: pwrdwn finished\n", __func__);
 	up(&gtTPS65185_DataA[0].chmod_lock);
 	pm_relax(&gpI2C_clientA[0]->dev);
 }
@@ -1478,13 +1478,13 @@ int tps65185_chg_mode(unsigned long *IO_pdwMode,int iIsWaitPwrOff)
 	//disable_irq(irq_INT);
 	//disable_irq(irq_PG);
 
-printk("%s: waiting for chmod_lock ... ", __func__);
+//printk("%s: waiting for chmod_lock ... ", __func__);
 	down(&gtTPS65185_DataA[0].chmod_lock);
-printk("[[ok-%s]]\n", __func__);
+//printk("[[ok-%s]]\n", __func__);
 
 	dwCurrent_mode = gtTPS65185_DataA[0].dwCurrent_mode;
 	dwNewMode = *IO_pdwMode;
-printk("%s: mode %d -> %d\n", __func__, dwCurrent_mode, dwNewMode);
+//printk("%s: mode %d -> %d\n", __func__, dwCurrent_mode, dwNewMode);
 
 	if(0==giIsTPS65185_inited) {
 		ERR_MSG("[Error] %s : tps65185 must be initialized first !\n",__FUNCTION__);
@@ -1791,7 +1791,7 @@ exit:
 
 	GALLEN_DBGLOCAL_END();
 
-printk("%s: finished\n", __func__);
+//printk("%s: finished\n", __func__);
 	up(&gtTPS65185_DataA[0].chmod_lock);
 	//enable_irq(irq_PG);
 	//enable_irq(irq_INT);
