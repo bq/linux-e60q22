@@ -1578,7 +1578,7 @@ void ntx_gpio_suspend (void)
 
 		
 //			gpio_direction_output (gMX6SL_IR_TOUCH_RST, 0);
-//			gpio_direction_output (GPIO_IR_3V3_ON, 0);
+			gpio_direction_output (GPIO_IR_3V3_ON, 0);
 		}
 	} else {
 		if(gpio_get_value(gMX6SL_IR_TOUCH_INT) == 0)
@@ -1707,7 +1707,8 @@ void ntx_gpio_suspend (void)
  * sleep on its own during suspend and the rst line being still 1
  * resumes the system when it gets reconfigured as input.
  */
-          __raw_writel( ntx_gpio_dir[4]&(~0x003ffdff), base+4);
+//          __raw_writel( ntx_gpio_dir[4]&(~0x003ffdff), base+4);
+        __raw_writel( ntx_gpio_dir[4]&(~0x003fffff), base+4);
 	}
 }
 
@@ -1738,7 +1739,7 @@ void ntx_gpio_resume (void)
 	if (gSleep_Mode_Suspend) {
 		if(0x03!=gptHWCFG->m_val.bUIConfig) {
 			// turn on ir touch power.
-//			gpio_direction_output (GPIO_IR_3V3_ON, 1);
+			gpio_direction_output (GPIO_IR_3V3_ON, 1);
 			gpio_free(IMX_GPIO_NR(3, 12));
 			gpio_free(IMX_GPIO_NR(3, 13));
 			mxc_iomux_v3_setup_pad(MX6SL_PAD_I2C1_SCL__I2C1_SCL);
