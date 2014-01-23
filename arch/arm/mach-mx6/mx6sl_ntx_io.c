@@ -472,6 +472,8 @@ int power_key_status (void)
 	return gpio_get_value (gMX6SL_PWR_SW)?0:1;
 }
 
+static last_FL_set;
+
 static int  ioctlDriver(struct file *filp, unsigned int command, unsigned long arg)
 {
 	unsigned long i = 0, temp;
@@ -841,6 +843,7 @@ printk("%s: CM_LED_BLINK %d\n", __func__, p);
 					schedule_delayed_work(&FL_off, 120);
 				}
 				last_FL_duty = p;
+				last_FL_set = p;
 			}
 			break;
 
@@ -865,6 +868,8 @@ printk("front light sleep %d\n", p);
 
 						msleep(100);
 						gpio_direction_output(MX6SL_FL_EN,0);
+
+						ioctlDriver(NULL, CM_FRONT_LIGHT_SET, last_FL_set);
 					}
 				}
 				else if(last_FL_duty != 0){
